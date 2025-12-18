@@ -1,0 +1,6 @@
+@simpleShare_backend_HostAddress = http://localhost:5169
+
+GET {{simpleShare_backend_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

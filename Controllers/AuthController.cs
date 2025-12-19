@@ -1,7 +1,7 @@
 using System.Net;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
-using simpleShare_backend.Dtos;
+using simpleShare_backend.Contracts.Auth;
 using simpleShare_backend.Interfaces;
 using simpleShare_backend.Models.Identity;
 
@@ -9,19 +9,13 @@ namespace simpleShare_backend.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
-    public class AuthController : ControllerBase
+    public class AuthController(UserManager<User> userManager, ITokenService tokenService) : ControllerBase
     {
-        private readonly UserManager<User> _userManager;
-        private readonly ITokenService _tokenService;
-        public AuthController(UserManager<User> userManager, ITokenService tokenService)
-        {
-            _userManager = userManager;
-            _tokenService = tokenService;
-        }
-
+        private readonly UserManager<User> _userManager = userManager;
+        private readonly ITokenService _tokenService = tokenService;
 
         [HttpPost("register")]
-        public async Task<IActionResult> RegisterAsync([FromBody] RegisterUserDto input)
+        public async Task<IActionResult> RegisterAsync([FromBody] RegisterRequest input)
         {
             try
             {
@@ -49,7 +43,7 @@ namespace simpleShare_backend.Controllers
 
                 var roles = await _userManager.GetRolesAsync(user);
                 return Ok(
-                    new NewUserDto
+                    new LoginUserResponse
                     {
                         Id = Guid.Parse(user.Id),
                         Email = user.Email!,
@@ -66,7 +60,7 @@ namespace simpleShare_backend.Controllers
         }
 
         [HttpPost("login")]
-        public async Task<IActionResult> LoginAsync([FromBody] LoginUserDto input)
+        public async Task<IActionResult> LoginAsync([FromBody] LoginRequest input)
         {
             try
             {
@@ -74,22 +68,19 @@ namespace simpleShare_backend.Controllers
                     return BadRequest(ModelState);
 
                 var user = await _userManager.FindByEmailAsync(input.Email);
-
                 if (user is null)
                     return Unauthorized("Invalid email or password");
 
-                var isPasswordValid = await _userManager.CheckPasswordAsync(user, input.Password);
 
+                var isPasswordValid = await _userManager.CheckPasswordAsync(user, input.Password);
                 if (!isPasswordValid)
                     return Unauthorized("Invalid email or password");
 
-
                 var userRole = await _userManager.GetRolesAsync(user);
-
                 var token = _tokenService.CreateToken(user, userRole);
 
                 return Ok(
-                    new NewUserDto
+                    new LoginUserResponse
                     {
                         Id = Guid.Parse(user.Id),
                         Email = user.Email!,

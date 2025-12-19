@@ -1,6 +1,6 @@
-namespace simpleShare_backend.Dtos
+namespace simpleShare_backend.Contracts.Auth
 {
-    public class NewUserDto
+    public class LoginUserResponse
     {
         public required Guid Id { get; set; }
         public required string FirstName { get; set; }

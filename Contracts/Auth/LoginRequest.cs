@@ -1,8 +1,8 @@
 using System.ComponentModel.DataAnnotations;
 
-namespace simpleShare_backend.Dtos
+namespace simpleShare_backend.Contracts.Auth
 {
-    public class LoginUserDto
+    public class LoginRequest
     {
         [Required]
         [EmailAddress]

@@ -24,9 +24,18 @@ namespace simpleShare_backend.Data
             builder.Entity<IdentityUserLogin<string>>().ToTable("UserLogins");
             builder.Entity<IdentityUserToken<string>>().ToTable("UserTokens");
             builder.Entity<IdentityRoleClaim<string>>().ToTable("RoleClaims");
-        }
 
-        // public DbSet<User> User { get; set; }
-        // public DbSet<Group> Group { get; set; }
+            // Seed Roles
+            List<IdentityRole> roles =
+            [
+                new() {
+                    Name = "User",
+                    NormalizedName = "USER",
+                    Id = "69d32c02-ba22-4ac6-bacf-2daa921f4993"
+                }
+            ];
+
+            builder.Entity<IdentityRole>().HasData(roles);
+        }
     }
 }

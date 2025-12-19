@@ -1,10 +1,11 @@
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
-using Microsoft.CodeAnalysis.Options;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using simpleShare_backend.Data;
+using simpleShare_backend.Interfaces;
 using simpleShare_backend.Models.Identity;
+using simpleShare_backend.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -23,7 +24,8 @@ builder.Services
             options.Password.RequireDigit = true;
             options.Password.RequireLowercase = true;
             options.Password.RequireUppercase = true;
-            options.Password.RequiredLength = 8;
+            options.Password.RequiredLength = 6;
+            options.Password.RequireNonAlphanumeric = false;
         })
     .AddEntityFrameworkStores<ApplicationDbContext>();
 
@@ -56,6 +58,22 @@ builder.Services.AddAuthentication(options =>
 builder.Services.AddControllers();
 builder.Services.AddAuthorization();
 
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("AllowAll", policy =>
+    {
+        policy.AllowAnyOrigin()
+              .AllowAnyMethod()
+              .AllowAnyHeader();
+    });
+});
+
+// #region Services scope
+
+builder.Services.AddScoped<ITokenService, TokenService>();
+
+// #endregion
+
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
@@ -67,6 +85,8 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 
 }
+
+app.UseCors("AllowAll");
 
 app.UseHttpsRedirection();
 

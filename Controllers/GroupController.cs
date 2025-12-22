@@ -28,8 +28,12 @@ public class GroupController(IGroupService service) : ControllerBase
     }
 
     [HttpGet]
-    public async Task<PageResponse<GroupResponse>> GetMyGroupsAsync([FromQuery] int skip, [FromQuery] int take)
+    public async Task<PageResponse<GroupResponse>> GetMyGroupsAsync(
+        [FromQuery] int skip,
+        [FromQuery] int take,
+        [FromQuery] string? query = ""
+    )
     {
-        return await service.GetMyGroupsAsync(skip, take);
+        return await service.GetMyGroupsAsync(skip, take, query);
     }
 }

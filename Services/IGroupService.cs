@@ -1,6 +1,5 @@
 using simpleShare_backend.Common;
 using simpleShare_backend.Contracts.Group;
-using simpleShare_backend.Domain;
 
 namespace simpleShare_backend.Services;
 

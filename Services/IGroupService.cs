@@ -6,10 +6,10 @@ namespace simpleShare_backend.Services;
 
 public interface IGroupService
 {
-    Task<Group> CreateGroupAsync(CreateGroupRequest request);
+    Task<GroupResponse> CreateGroupAsync(CreateGroupRequest request);
     Task<GroupResponse> GetGroupAsync(Guid id);
     Task<PageResponse<GroupResponse>> GetMyGroupsAsync(int skip, int take, string? query = "");
     // TODO add update group
     // TODO add delete group
-
+    // TODO add restore group
 }

@@ -11,7 +11,7 @@ public class GroupService(IRepositoryAsync repo) : IGroupService
 {
     private readonly IRepositoryAsync _repo = repo;
 
-    public async Task<Group> CreateGroupAsync(CreateGroupRequest request)
+    public async Task<GroupResponse> CreateGroupAsync(CreateGroupRequest request)
     {
         var newGroup = new Group
         {
@@ -24,7 +24,7 @@ public class GroupService(IRepositoryAsync repo) : IGroupService
         Group response = await _repo.CreateAsync<Group, Guid>(newGroup);
         await _repo.SaveChangesAsync();
 
-        return response;
+        return response.ToResponse();
     }
 
     public async Task<GroupResponse> GetGroupAsync(Guid id)

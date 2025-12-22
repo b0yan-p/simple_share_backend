@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using simpleShare_backend.Data;
+using simpleShare_backend.Infrastructure;
 using simpleShare_backend.Interfaces;
 using simpleShare_backend.Models.Identity;
 using simpleShare_backend.Services;
@@ -71,6 +72,8 @@ builder.Services.AddCors(options =>
 // #region Services scope
 
 builder.Services.AddScoped<ITokenService, TokenService>();
+builder.Services.AddScoped<IRepositoryAsync, RepositoryAsync>();
+builder.Services.AddScoped<IGroupService, GroupService>();
 
 // #endregion
 

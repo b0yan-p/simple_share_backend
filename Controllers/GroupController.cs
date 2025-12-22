@@ -1,0 +1,35 @@
+
+using Microsoft.AspNetCore.Mvc;
+using simpleShare_backend.Common;
+using simpleShare_backend.Contracts.Group;
+using simpleShare_backend.Services;
+
+namespace simpleShare_backend.Controllers;
+
+[ApiController]
+[Route("api/[controller]")]
+public class GroupController(IGroupService service) : ControllerBase
+{
+    [HttpPost]
+    public async Task<IActionResult> CreateGroupAsync([FromBody] CreateGroupRequest request)
+    {
+        if (!ModelState.IsValid)
+            return BadRequest(ModelState);
+
+        var response = await service.CreateGroupAsync(request);
+        return Ok(response);
+    }
+
+    [HttpGet("{groupId}")]
+    public async Task<IActionResult> GetGroupByIdAsync([FromRoute] Guid groupId)
+    {
+        var response = await service.GetGroupAsync(groupId);
+        return Ok(response);
+    }
+
+    [HttpGet]
+    public async Task<PageResponse<GroupResponse>> GetMyGroupsAsync([FromQuery] int skip, [FromQuery] int take)
+    {
+        return await service.GetMyGroupsAsync(skip, take);
+    }
+}

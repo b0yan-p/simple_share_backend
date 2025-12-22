@@ -4,6 +4,7 @@ using simpleShare_backend.Domain;
 using simpleShare_backend.Services.Specifications;
 using simpleShare_backend.Common;
 using simpleShare_backend.Common.Extensions;
+using Microsoft.AspNetCore.Authorization;
 
 namespace simpleShare_backend.Services;
 
@@ -25,6 +26,14 @@ public class GroupService(IRepositoryAsync repo) : IGroupService
         await _repo.SaveChangesAsync();
 
         return response.ToResponse();
+    }
+
+    public async Task<GroupResponse> DeleteGroupAsync(Guid id)
+    {
+        var group = await _repo.DeleteAsync<Group, Guid>(id);
+        await _repo.SaveChangesAsync();
+
+        return group.ToResponse();
     }
 
     public async Task<GroupResponse> GetGroupAsync(Guid id)

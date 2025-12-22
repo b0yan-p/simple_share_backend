@@ -1,4 +1,5 @@
 
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using simpleShare_backend.Common;
 using simpleShare_backend.Contracts.Group;
@@ -27,6 +28,7 @@ public class GroupController(IGroupService service) : ControllerBase
         return Ok(response);
     }
 
+    [Authorize]
     [HttpGet]
     public async Task<PageResponse<GroupResponse>> GetMyGroupsAsync(
         [FromQuery] int skip,
@@ -35,5 +37,12 @@ public class GroupController(IGroupService service) : ControllerBase
     )
     {
         return await service.GetMyGroupsAsync(skip, take, query);
+    }
+
+    [HttpDelete("{groupId}")]
+    public async Task<IActionResult> DeleteGroupAsync([FromRoute] Guid groupId)
+    {
+        var response = await service.DeleteGroupAsync(groupId);
+        return Ok(response);
     }
 }

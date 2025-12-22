@@ -8,7 +8,7 @@ public interface IGroupService
     Task<GroupResponse> CreateGroupAsync(CreateGroupRequest request);
     Task<GroupResponse> GetGroupAsync(Guid id);
     Task<PageResponse<GroupResponse>> GetMyGroupsAsync(int skip, int take, string? query = "");
+    Task<GroupResponse> DeleteGroupAsync(Guid id);
     // TODO add update group
-    // TODO add delete group
     // TODO add restore group
 }

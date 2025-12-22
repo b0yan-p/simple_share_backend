@@ -106,6 +106,9 @@ public class RepositoryAsync(ApplicationDbContext dbContext) : IRepositoryAsync
         T dbEntity = await dbContext.Set<T>().FindAsync(entityId)
             ?? throw new Exception("Entity not found!");
 
+        if (dbEntity.DeletedAt != null)
+            throw new Exception("Entity already deleted!");
+
         dbEntity.DeletedAt = DateTime.UtcNow;
         return dbEntity;
     }

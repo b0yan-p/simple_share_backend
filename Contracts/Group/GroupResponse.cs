@@ -6,4 +6,5 @@ public class GroupResponse
     public string Name { get; set; } = string.Empty;
     public bool SimplifyDebts { get; set; } = false;
     public DateTime CreatedAt { get; set; } = default;
+    public DateTime? DeletedAt { get; set; } = null;
 }

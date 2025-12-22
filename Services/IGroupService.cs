@@ -9,6 +9,6 @@ public interface IGroupService
     Task<GroupResponse> GetGroupAsync(Guid id);
     Task<PageResponse<GroupResponse>> GetMyGroupsAsync(int skip, int take, string? query = "");
     Task<GroupResponse> DeleteGroupAsync(Guid id);
+    Task<GroupResponse> RestoreGroupAsync(Guid id);
     // TODO add update group
-    // TODO add restore group
 }

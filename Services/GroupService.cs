@@ -36,6 +36,14 @@ public class GroupService(IRepositoryAsync repo) : IGroupService
         return group.ToResponse();
     }
 
+    public async Task<GroupResponse> RestoreGroupAsync(Guid id)
+    {
+        var group = await _repo.RestoreAsync<Group, Guid>(id);
+        await _repo.SaveChangesAsync();
+
+        return group.ToResponse();
+    }
+
     public async Task<GroupResponse> GetGroupAsync(Guid id)
     {
         var group = await _repo.GetByIdAsync<Group, Guid>(id);

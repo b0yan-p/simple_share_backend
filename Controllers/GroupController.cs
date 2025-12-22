@@ -45,4 +45,11 @@ public class GroupController(IGroupService service) : ControllerBase
         var response = await service.DeleteGroupAsync(groupId);
         return Ok(response);
     }
+
+    [HttpPost("{groupId}/restore")]
+    public async Task<IActionResult> RestoreGroupAsync([FromRoute] Guid groupId)
+    {
+        var response = await service.RestoreGroupAsync(groupId);
+        return Ok(response);
+    }
 }

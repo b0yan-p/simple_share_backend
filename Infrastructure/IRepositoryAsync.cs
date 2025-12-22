@@ -27,5 +27,8 @@ public interface IRepositoryAsync
     Task<T> DeleteAsync<T, TId>(TId entityId)
     where T : BaseModel<TId>, IDeletable;
 
+    Task<T> RestoreAsync<T, TId>(TId entityId)
+    where T : BaseModel<TId>, IDeletable;
+
     Task<int> SaveChangesAsync();
 }

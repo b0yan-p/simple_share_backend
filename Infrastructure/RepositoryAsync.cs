@@ -118,4 +118,15 @@ public class RepositoryAsync(ApplicationDbContext dbContext) : IRepositoryAsync
         return await dbContext.SaveChangesAsync();
     }
 
+    public async Task<T> RestoreAsync<T, TId>(TId entityId) where T : BaseModel<TId>, IDeletable
+    {
+        T dbEntity = await dbContext.Set<T>().FindAsync(entityId)
+            ?? throw new Exception("Entity not found!");
+
+        if (dbEntity.DeletedAt == null)
+            throw new Exception("Entity is not deleted!");
+
+        dbEntity.DeletedAt = null;
+        return dbEntity;
+    }
 }

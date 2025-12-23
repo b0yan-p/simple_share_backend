@@ -21,6 +21,16 @@ public class GroupController(IGroupService service) : ControllerBase
         return Ok(response);
     }
 
+    [HttpPut]
+    public async Task<IActionResult> UpdateGroupAsync([FromBody] CreateGroupRequest request)
+    {
+        if (!ModelState.IsValid)
+            return BadRequest(ModelState);
+
+        var response = await service.UpdateGroupAsync(request);
+        return Ok(response);
+    }
+
     [HttpGet("{groupId}")]
     public async Task<IActionResult> GetGroupByIdAsync([FromRoute] Guid groupId)
     {

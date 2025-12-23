@@ -28,6 +28,23 @@ public class GroupService(IRepositoryAsync repo) : IGroupService
         return response.ToResponse();
     }
 
+    public async Task<GroupResponse> UpdateGroupAsync(CreateGroupRequest request)
+    {
+        if (request.Id == null)
+            throw new Exception("Group ID is required for update.");
+
+        var dbGroup = await _repo.GetByIdAsync<Group, Guid>(request.Id.Value, null);
+
+        dbGroup.ModifiedAt = DateTime.UtcNow;
+        dbGroup.Name = request.Name;
+        dbGroup.SimplifyDebts = request.SimplifyDebts ?? dbGroup.SimplifyDebts;
+
+        var response = await _repo.UpdateAsync<Group, Guid>(dbGroup);
+        await _repo.SaveChangesAsync();
+
+        return response.ToResponse();
+    }
+
     public async Task<GroupResponse> DeleteGroupAsync(Guid id)
     {
         var group = await _repo.DeleteAsync<Group, Guid>(id);

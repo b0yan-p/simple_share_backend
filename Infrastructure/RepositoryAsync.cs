@@ -54,6 +54,9 @@ public class RepositoryAsync(ApplicationDbContext dbContext) : IRepositoryAsync
             query = dbContext.Set<T>();
         }
 
+        if (typeof(IDeletable).IsAssignableFrom(typeof(T)))
+            query = query.Where(e => ((IDeletable)e).DeletedAt == null);
+
         List<T> result;
         int totalCount;
 

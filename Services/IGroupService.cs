@@ -5,7 +5,7 @@ namespace simpleShare_backend.Services;
 
 public interface IGroupService
 {
-    Task<GroupResponse> CreateGroupAsync(CreateGroupRequest request);
+    Task<GroupResponse> CreateGroupAsync(CreateGroupRequest request, Guid userId);
     Task<GroupResponse> UpdateGroupAsync(CreateGroupRequest request);
     Task<GroupResponse> GetGroupAsync(Guid id);
     Task<PageResponse<GroupResponse>> GetMyGroupsAsync(int skip, int take, string? query = "");

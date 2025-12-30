@@ -199,6 +199,9 @@ namespace simpleShare_backend.Migrations
                     b.Property<int>("GroupMemberStatus")
                         .HasColumnType("int");
 
+                    b.Property<int>("GroupRole")
+                        .HasColumnType("int");
+
                     b.Property<DateTime>("JoinedAt")
                         .HasColumnType("datetime2");
 

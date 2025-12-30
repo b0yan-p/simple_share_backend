@@ -1,4 +1,5 @@
 
+using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using simpleShare_backend.Common;
@@ -17,8 +18,15 @@ public class GroupController(IGroupService service) : ControllerBase
         if (!ModelState.IsValid)
             return BadRequest(ModelState);
 
-        var response = await service.CreateGroupAsync(request);
-        return Ok(response);
+        var userIdStr = User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+        if (userIdStr is not null && Guid.TryParse(userIdStr, out Guid userId))
+        {
+            var response = await service.CreateGroupAsync(request, userId);
+            return Ok(response);
+        }
+
+        return BadRequest("User not found");
     }
 
     [HttpPut]

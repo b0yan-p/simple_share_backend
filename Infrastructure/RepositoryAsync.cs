@@ -11,7 +11,7 @@ namespace simpleShare_backend.Infrastructure;
 public class RepositoryAsync(ApplicationDbContext dbContext) : IRepositoryAsync
 {
 
-    public async Task<T> GetByIdAsync<T, TId>(
+    public async Task<T?> GetByIdAsync<T, TId>(
             TId id, ISpecification<T>? spec = null, CancellationToken ct = default
     ) where T : BaseModel<TId>
     {
@@ -28,9 +28,32 @@ public class RepositoryAsync(ApplicationDbContext dbContext) : IRepositoryAsync
             query = dbContext.Set<T>();
         }
 
-        T? entity = await query.FirstOrDefaultAsync(e => e.Id!.Equals(id)) ??
-            throw new Exception("Entity not found!");
+        // TODO implement query filters here with ignore query filters logic
+        // Filter deleted entities
+        if (typeof(IDeletable).IsAssignableFrom(typeof(T)))
+            query = query.Where(e => ((IDeletable)e).DeletedAt == null);
 
+        T? entity = await query.FirstOrDefaultAsync(e => e.Id!.Equals(id), cancellationToken: ct);
+        //  ?? throw new Exception("Entity not found!");
+
+        return entity;
+    }
+
+    public async Task<T?> GetSingleAsync<T, TId>(
+        ISpecification<T> spec,
+        CancellationToken ct = default
+    ) where T : BaseModel<TId>
+    {
+        IQueryable<T> query = SpecificationEvaluator.Default.GetQuery(
+            query: dbContext.Set<T>(),
+            specification: spec
+        );
+
+        // TODO once i add default methods i need uncomment this
+        // if (typeof(IDeletable).IsAssignableFrom(typeof(T)))
+        //     query = query.Where(e => ((IDeletable)e).DeletedAt == null);
+
+        T? entity = await query.FirstOrDefaultAsync(ct);
         return entity;
     }
 
@@ -131,5 +154,11 @@ public class RepositoryAsync(ApplicationDbContext dbContext) : IRepositoryAsync
 
         dbEntity.DeletedAt = null;
         return dbEntity;
+    }
+
+    public async Task<T> CreateWithCompositeId<T>(T entity) where T : class
+    {
+        _ = await dbContext.Set<T>().AddAsync(entity);
+        return entity;
     }
 }

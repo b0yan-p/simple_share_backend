@@ -8,6 +8,7 @@ public class GroupMember
     public Guid GroupId { get; set; }
     public Guid MemberId { get; set; }
 
+    public GroupRole GroupRole { get; set; } = GroupRole.Member;
     public GroupMemberStatus GroupMemberStatus { get; set; } = GroupMemberStatus.Active;
     public DateTime JoinedAt { get; set; }
     public DateTime? LeftAt { get; set; }

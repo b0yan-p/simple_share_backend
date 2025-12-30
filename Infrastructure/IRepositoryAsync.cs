@@ -13,10 +13,13 @@ public interface IRepositoryAsync
         ISpecification<T>? spec = null, CancellationToken ct = default
     ) where T : BaseModel<TId>;
 
-    Task<T> GetByIdAsync<T, TId>(
+    Task<T?> GetByIdAsync<T, TId>(
         TId id, ISpecification<T>? spec = null,
         CancellationToken ct = default
     ) where T : BaseModel<TId>;
+
+    Task<T?> GetSingleAsync<T, TId>(ISpecification<T> spec, CancellationToken ct = default)
+        where T : BaseModel<TId>;
 
     Task<T> CreateAsync<T, TId>(T entity)
     where T : BaseModel<TId>;
@@ -31,4 +34,6 @@ public interface IRepositoryAsync
     where T : BaseModel<TId>, IDeletable;
 
     Task<int> SaveChangesAsync();
+
+    Task<T> CreateWithCompositeId<T>(T entity) where T : class;
 }

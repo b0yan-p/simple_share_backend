@@ -4,15 +4,15 @@ using simpleShare_backend.Domain;
 using simpleShare_backend.Services.Specifications;
 using simpleShare_backend.Common;
 using simpleShare_backend.Common.Extensions;
-using Microsoft.AspNetCore.Authorization;
+using simpleShare_backend.Models.Domain;
 
 namespace simpleShare_backend.Services;
 
-public class GroupService(IRepositoryAsync repo) : IGroupService
+public class GroupService(IRepositoryAsync repo, IMemberService memberService, IUserService userService) : IGroupService
 {
     private readonly IRepositoryAsync _repo = repo;
 
-    public async Task<GroupResponse> CreateGroupAsync(CreateGroupRequest request)
+    public async Task<GroupResponse> CreateGroupAsync(CreateGroupRequest request, Guid userId)
     {
         var newGroup = new Group
         {
@@ -22,7 +22,28 @@ public class GroupService(IRepositoryAsync repo) : IGroupService
             CreatedAt = DateTime.UtcNow
         };
 
-        Group response = await _repo.CreateAsync<Group, Guid>(newGroup);
+        var response = await _repo.CreateAsync<Group, Guid>(newGroup);
+        var member = await memberService.GetMemberByUserIdAsync(userId);
+
+        if (member?.DeletedAt is not null) throw new Exception("Member with this id is deleted!");
+
+        if (member is null)
+        {
+            var user = await userService.GetUserAsync(userId) ?? throw new Exception("User not found");
+            member = await memberService.CreateMemberFromUserAsync(user);
+        }
+
+        GroupMember groupMember = new()
+        {
+            MemberId = member.Id,
+            GroupId = newGroup.Id,
+            GroupRole = Models.Enums.GroupRole.Owner,
+            JoinedAt = DateTime.UtcNow,
+            GroupMemberStatus = Models.Enums.GroupMemberStatus.Active
+        };
+
+        await _repo.CreateWithCompositeId<GroupMember>(groupMember);
+
         await _repo.SaveChangesAsync();
 
         return response.ToResponse();
@@ -33,7 +54,8 @@ public class GroupService(IRepositoryAsync repo) : IGroupService
         if (request.Id == null)
             throw new Exception("Group ID is required for update.");
 
-        var dbGroup = await _repo.GetByIdAsync<Group, Guid>(request.Id.Value, null);
+        var dbGroup = await _repo.GetByIdAsync<Group, Guid>(request.Id.Value, null)
+            ?? throw new Exception("Group is not found");
 
         dbGroup.ModifiedAt = DateTime.UtcNow;
         dbGroup.Name = request.Name;
@@ -63,7 +85,8 @@ public class GroupService(IRepositoryAsync repo) : IGroupService
 
     public async Task<GroupResponse> GetGroupAsync(Guid id)
     {
-        var group = await _repo.GetByIdAsync<Group, Guid>(id);
+        var group = await _repo.GetByIdAsync<Group, Guid>(id)
+            ?? throw new Exception("Group not found!");
 
         GroupResponse response = new()
         {

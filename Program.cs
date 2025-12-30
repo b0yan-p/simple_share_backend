@@ -74,7 +74,10 @@ builder.Services.AddCors(options =>
 // #region Services scope
 
 builder.Services.AddScoped<ITokenService, TokenService>();
+builder.Services.AddScoped<IUserRepository, UserRepository>();
 builder.Services.AddScoped<IRepositoryAsync, RepositoryAsync>();
+builder.Services.AddScoped<IUserService, UserService>();
+builder.Services.AddScoped<IMemberService, MemberService>();
 builder.Services.AddScoped<IGroupService, GroupService>();
 
 // #endregion

@@ -45,7 +45,7 @@ namespace simpleShare_backend.Controllers
                 return Ok(
                     new LoginUserResponse
                     {
-                        Id = Guid.Parse(user.Id),
+                        Id = user.Id,
                         Email = user.Email!,
                         FirstName = user.FirstName,
                         LastName = user.LastName,
@@ -82,7 +82,7 @@ namespace simpleShare_backend.Controllers
                 return Ok(
                     new LoginUserResponse
                     {
-                        Id = Guid.Parse(user.Id),
+                        Id = user.Id,
                         Email = user.Email!,
                         FirstName = user.FirstName,
                         LastName = user.LastName,

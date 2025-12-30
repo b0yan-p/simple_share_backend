@@ -1,10 +1,11 @@
 using Microsoft.AspNetCore.Identity;
+using simpleShare_backend.Models.Domain;
 
-namespace simpleShare_backend.Models.Identity
+namespace simpleShare_backend.Models.Identity;
+
+public class User : IdentityUser<Guid>
 {
-    public class User : IdentityUser
-    {
-        public string FirstName { get; set; } = string.Empty;
-        public string LastName { get; set; } = string.Empty;
-    }
+    public string FirstName { get; set; } = string.Empty;
+    public string LastName { get; set; } = string.Empty;
+    public Member? Member { get; set; }
 }

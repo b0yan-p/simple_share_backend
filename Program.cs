@@ -20,7 +20,7 @@ builder.Services
         {
             options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection"));
         })
-    .AddIdentity<User, IdentityRole>(options =>
+    .AddIdentity<User, IdentityRole<Guid>>(options =>
         {
             options.Password.RequireDigit = true;
             options.Password.RequireLowercase = true;

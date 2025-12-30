@@ -25,4 +25,5 @@ public class Member : BaseModel<Guid>, IDeletable, ICreatable, IModifiable
     public DateTime? ModifiedAt { get; set; }
     public Guid? UserId { get; set; }
     public User? User { get; set; }
+    public ICollection<GroupMember> GroupMembers { get; } = [];
 }

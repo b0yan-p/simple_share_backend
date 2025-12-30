@@ -13,6 +13,7 @@ public class ApplicationDbContext(DbContextOptions dbContextOptions)
 {
     public DbSet<Group> Groups { get; set; }
     public DbSet<Member> Members { get; set; }
+    public DbSet<GroupMember> GroupMembers { get; set; }
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -29,10 +30,27 @@ public class ApplicationDbContext(DbContextOptions dbContextOptions)
         builder.Entity<IdentityRoleClaim<Guid>>().ToTable("RoleClaims");
 
         #region Indexes
+
         builder.Entity<Member>()
             .HasIndex(m => m.UserId)
             .IsUnique()
             .HasFilter("[UserId] IS NOT NULL");
+
+        // Group members
+        builder.Entity<GroupMember>()
+            .HasKey(x => new { x.GroupId, x.MemberId });
+
+        builder.Entity<GroupMember>()
+            .HasOne(x => x.Group)
+            .WithMany(x => x.GroupMembers)
+            .HasForeignKey(x => x.GroupId);
+
+        builder.Entity<GroupMember>()
+            .HasOne(x => x.Member)
+            .WithMany(x => x.GroupMembers)
+            .HasForeignKey(x => x.MemberId);
+        // Group members END
+
         #endregion
 
         // Seed Roles

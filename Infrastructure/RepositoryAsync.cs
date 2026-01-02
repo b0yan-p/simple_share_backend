@@ -10,37 +10,40 @@ namespace simpleShare_backend.Infrastructure;
 
 public class RepositoryAsync(ApplicationDbContext dbContext) : IRepositoryAsync
 {
-
-    public async Task<T?> GetByIdAsync<T, TId>(
+    public async Task<T> GetByIdAsync<T, TId>(
             TId id, ISpecification<T>? spec = null, CancellationToken ct = default
     ) where T : BaseModel<TId>
     {
-        IQueryable<T> query;
-        if (spec is not null)
-        {
-            query = SpecificationEvaluator.Default.GetQuery(
-                query: dbContext.Set<T>(),
-                specification: spec
-            );
-        }
-        else
-        {
-            query = dbContext.Set<T>();
-        }
-
+        IQueryable<T> query = ApplyQuerySpecification<T, TId>(spec);
         // TODO implement query filters here with ignore query filters logic
-        // Filter deleted entities
-        if (typeof(IDeletable).IsAssignableFrom(typeof(T)))
-            query = query.Where(e => ((IDeletable)e).DeletedAt == null);
+        query = FilterSoftDeleted<T, TId>(query);
 
-        T? entity = await query.FirstOrDefaultAsync(e => e.Id!.Equals(id), cancellationToken: ct);
-        //  ?? throw new Exception("Entity not found!");
+        T entity = await query.FirstOrDefaultAsync(e => e.Id!.Equals(id), cancellationToken: ct)
+         ?? throw new Exception("Entity not found!");
 
         return entity;
     }
 
-    public async Task<T?> GetSingleAsync<T, TId>(
+    public async Task<T?> GetByIdDefaultAsync<T, TId>(
+        TId id, ISpecification<T>? spec = null,
+        bool ignoreDeleted = false,
+        CancellationToken ct = default
+    ) where T : BaseModel<TId>
+    {
+        IQueryable<T> query = ApplyQuerySpecification<T, TId>(spec);
+
+        if (ignoreDeleted && typeof(IDeletable).IsAssignableFrom(typeof(T)))
+            query = FilterSoftDeleted<T, TId>(query);
+
+
+        T? entity = await query.FirstOrDefaultAsync(e => e.Id!.Equals(id), cancellationToken: ct);
+
+        return entity;
+    }
+
+    public async Task<T?> GetSingleDefaultAsync<T, TId>(
         ISpecification<T> spec,
+        bool ignoreDeleted = false,
         CancellationToken ct = default
     ) where T : BaseModel<TId>
     {
@@ -50,8 +53,8 @@ public class RepositoryAsync(ApplicationDbContext dbContext) : IRepositoryAsync
         );
 
         // TODO once i add default methods i need uncomment this
-        // if (typeof(IDeletable).IsAssignableFrom(typeof(T)))
-        //     query = query.Where(e => ((IDeletable)e).DeletedAt == null);
+        if (ignoreDeleted && typeof(IDeletable).IsAssignableFrom(typeof(T)))
+            query = query.Where(e => ((IDeletable)e).DeletedAt == null);
 
         T? entity = await query.FirstOrDefaultAsync(ct);
         return entity;
@@ -64,18 +67,7 @@ public class RepositoryAsync(ApplicationDbContext dbContext) : IRepositoryAsync
         CancellationToken ct = default
     ) where T : BaseModel<TId>
     {
-        IQueryable<T> query;
-        if (spec is not null)
-        {
-            query = SpecificationEvaluator.Default.GetQuery(
-                query: dbContext.Set<T>(),
-                specification: spec
-            );
-        }
-        else
-        {
-            query = dbContext.Set<T>();
-        }
+        var query = this.ApplyQuerySpecification<T, TId>(spec);
 
         if (typeof(IDeletable).IsAssignableFrom(typeof(T)))
             query = query.Where(e => ((IDeletable)e).DeletedAt == null);
@@ -89,7 +81,6 @@ public class RepositoryAsync(ApplicationDbContext dbContext) : IRepositoryAsync
 
             if (take == -1)
                 result = await query.ToListAsync(ct);
-
             else
             {
                 result = await query
@@ -97,15 +88,27 @@ public class RepositoryAsync(ApplicationDbContext dbContext) : IRepositoryAsync
                     .Take(take)
                     .ToListAsync(ct);
             }
-
             return new PageResponse<T>(result, totalCount, skip, take);
-
         }
         catch (Exception e)
         {
             totalCount = 0;
             throw new Exception("Error fetching entities: " + e.Message);
         }
+    }
+
+    public async Task<ICollection<T>?> GetAllDefaultAsync<T, TId>(
+        ISpecification<T>? spec = null,
+        bool ignoreDeleted = false,
+        CancellationToken ct = default
+    ) where T : BaseModel<TId>
+    {
+        var query = ApplyQuerySpecification<T, TId>(spec);
+
+        if (ignoreDeleted && typeof(IDeletable).IsAssignableFrom(typeof(T)))
+            query = query.Where(e => ((IDeletable)e).DeletedAt == null);
+
+        return await query.ToListAsync(cancellationToken: ct);
     }
 
     public async Task<T> CreateAsync<T, TId>(T entity) where T : BaseModel<TId>
@@ -160,5 +163,30 @@ public class RepositoryAsync(ApplicationDbContext dbContext) : IRepositoryAsync
     {
         _ = await dbContext.Set<T>().AddAsync(entity);
         return entity;
+    }
+
+    private IQueryable<T> ApplyQuerySpecification<T, TId>(ISpecification<T>? spec) where T : BaseModel<TId>
+    {
+        IQueryable<T> query;
+
+        if (spec is not null)
+        {
+            query = SpecificationEvaluator.Default.GetQuery(
+                query: dbContext.Set<T>(),
+                specification: spec
+            );
+        }
+        else
+            query = dbContext.Set<T>();
+
+        return query;
+    }
+
+    private IQueryable<T> FilterSoftDeleted<T, TId>(IQueryable<T> query) where T : BaseModel<TId>
+    {
+        if (typeof(IDeletable).IsAssignableFrom(typeof(T)))
+            return query.Where(e => ((IDeletable)e).DeletedAt == null);
+
+        return query;
     }
 }

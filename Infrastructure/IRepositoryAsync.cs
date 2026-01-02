@@ -10,16 +10,32 @@ public interface IRepositoryAsync
     Task<PageResponse<T>> GetAllAsync<T, TId>(
         int skip,
         int take,
-        ISpecification<T>? spec = null, CancellationToken ct = default
+        ISpecification<T>? spec = null,
+        CancellationToken ct = default
     ) where T : BaseModel<TId>;
 
-    Task<T?> GetByIdAsync<T, TId>(
+    Task<ICollection<T>?> GetAllDefaultAsync<T, TId>(
+        ISpecification<T>? spec = null,
+        bool ignoreDeleted = false,
+        CancellationToken ct = default
+    ) where T : BaseModel<TId>;
+
+    Task<T> GetByIdAsync<T, TId>(
         TId id, ISpecification<T>? spec = null,
         CancellationToken ct = default
     ) where T : BaseModel<TId>;
 
-    Task<T?> GetSingleAsync<T, TId>(ISpecification<T> spec, CancellationToken ct = default)
-        where T : BaseModel<TId>;
+    Task<T?> GetByIdDefaultAsync<T, TId>(
+        TId id, ISpecification<T>? spec = null,
+        bool ignoreDeleted = false,
+        CancellationToken ct = default
+    ) where T : BaseModel<TId>;
+
+    Task<T?> GetSingleDefaultAsync<T, TId>(
+        ISpecification<T> spec,
+        bool ignoreDeleted = false,
+        CancellationToken ct = default
+    ) where T : BaseModel<TId>;
 
     Task<T> CreateAsync<T, TId>(T entity)
     where T : BaseModel<TId>;
@@ -33,7 +49,7 @@ public interface IRepositoryAsync
     Task<T> RestoreAsync<T, TId>(TId entityId)
     where T : BaseModel<TId>, IDeletable;
 
-    Task<int> SaveChangesAsync();
-
     Task<T> CreateWithCompositeId<T>(T entity) where T : class;
+
+    Task<int> SaveChangesAsync();
 }

@@ -26,13 +26,13 @@ public class MemberService(IRepositoryAsync repo) : IMemberService
 
     public async Task<Member?> GetMemberAsync(Guid id)
     {
-        return await repo.GetByIdAsync<Member, Guid>(id);
+        return await repo.GetByIdDefaultAsync<Member, Guid>(id);
     }
 
     public async Task<Member?> GetMemberByUserIdAsync(Guid userId)
     {
         MemberFilterByUser spec = new(userId);
-        var member = await repo.GetSingleAsync<Member, Guid>(spec);
+        var member = await repo.GetSingleDefaultAsync<Member, Guid>(spec, true);
         return member;
     }
 }

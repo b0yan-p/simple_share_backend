@@ -1,11 +1,16 @@
+using simpleShare_backend.Common.Extensions;
+using simpleShare_backend.Contracts.Member;
 using simpleShare_backend.Infrastructure;
 using simpleShare_backend.Models.Domain;
 using simpleShare_backend.Models.Enums;
-using simpleShare_backend.Services.Specifications.GroupMembers;
 
 namespace simpleShare_backend.Services;
 
-public class GroupMemberService(IRepositoryAsync repo, IMemberService memberService) : IGroupMemberService
+public class GroupMemberService(
+    IMemberService memberService,
+    IGroupService groupService,
+    IGroupMemberRepository groupMemberRepo
+) : IGroupMemberService
 {
     public async Task<GroupMember?> AddExistingMemberIntoGroupAsync(Guid memberId, Guid groupId)
     {
@@ -17,9 +22,7 @@ public class GroupMemberService(IRepositoryAsync repo, IMemberService memberServ
 
     public async Task<GroupMember?> CreateGroupMemberDefaultAsync(Member member, Guid groupId)
     {
-        GroupMemberByIdSpec spec = new(groupId, member.Id);
-
-        var gm = await repo.GetSingleDefaultAsync<GroupMember>(spec);
+        var gm = await groupMemberRepo.GetGroupMemberDefaultAsync(groupId, member.Id);
 
         if (gm is null)
         {
@@ -32,15 +35,41 @@ public class GroupMemberService(IRepositoryAsync repo, IMemberService memberServ
                 GroupMemberStatus = Models.Enums.GroupMemberStatus.Active
             };
 
-            return await repo.CreateWithCompositeId(gm);
+            return await groupMemberRepo.CreateGroupMemberAsync(gm);
         }
         else if (gm is not null && gm.LeftAt is not null)
         {
             gm.LeftAt = null;
             gm.GroupMemberStatus = GroupMemberStatus.Active;
-            return repo.UpdateWithCompositeId(gm);
+            return groupMemberRepo.UpdateGroupMember(gm);
         }
         else
             throw new Exception("Member is already joined at this group");
+    }
+
+    public async Task<ICollection<GroupMemberResponse>> GetAllGroupMembersAsync(Guid groupId)
+    {
+        _ = await groupService.GetGroupAsync(groupId)
+            ?? throw new Exception("Group does not exist!");
+
+        var members = await groupMemberRepo.GetAllAsync(groupId);
+
+        return [.. members.Select(x => x.ToResponse())];
+    }
+
+    public async Task<GroupMember> RemoveGroupMemberAsync(Guid groupId, Guid memberId)
+    {
+        var gm = await groupMemberRepo.GetGroupMemberDefaultAsync(groupId, memberId)
+            ?? throw new Exception("Member does not exist!");
+
+        if (gm.LeftAt is not null)
+            throw new Exception("Member is already removed from group");
+
+        gm.LeftAt = DateTime.UtcNow;
+        gm.GroupMemberStatus = GroupMemberStatus.Deleted;
+
+        var result = groupMemberRepo.UpdateGroupMember(gm);
+        await groupMemberRepo.SaveChangesAsync();
+        return result;
     }
 }

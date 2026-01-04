@@ -10,6 +10,6 @@ public class MemberByEmailSpec : Specification<Member>
         if (string.IsNullOrEmpty(email))
             return;
 
-        _ = Query.Where(x => x.NormalizedEmail == email.ToUpper());
+        _ = Query.Where(x => x.NormalizedEmail == email.Trim().ToUpper());
     }
 }

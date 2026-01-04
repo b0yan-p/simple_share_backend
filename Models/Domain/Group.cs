@@ -11,5 +11,6 @@ public class Group : BaseModel<Guid>, IDeletable, ICreatable, IModifiable
     public DateTime CreatedAt { get; set; }
     public DateTime? ModifiedAt { get; set; }
     public DateTime? DeletedAt { get; set; }
-    public ICollection<GroupMember> GroupMembers { get; set; } = [];
+    public ICollection<GroupMember> GroupMembers { get; } = [];
+    public ICollection<Expense> Expenses { get; } = [];
 }

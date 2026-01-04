@@ -14,6 +14,9 @@ public class ApplicationDbContext(DbContextOptions dbContextOptions)
     public DbSet<Group> Groups { get; set; }
     public DbSet<Member> Members { get; set; }
     public DbSet<GroupMember> GroupMembers { get; set; }
+    public DbSet<Expense> Expenses { get; set; }
+    public DbSet<ExpensePayment> ExpensePayments { get; set; }
+    public DbSet<ExpenseSplit> ExpenseSplits { get; set; }
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -29,14 +32,27 @@ public class ApplicationDbContext(DbContextOptions dbContextOptions)
         builder.Entity<IdentityUserToken<Guid>>().ToTable("UserTokens");
         builder.Entity<IdentityRoleClaim<Guid>>().ToTable("RoleClaims");
 
-        #region Indexes
 
+        #region Index
         builder.Entity<Member>()
             .HasIndex(m => m.UserId)
             .IsUnique()
             .HasFilter("[UserId] IS NOT NULL");
 
-        // Group members
+        builder.Entity<Member>()
+            .HasIndex(m => m.NormalizedEmail)
+            .IsUnique()
+            .HasFilter("[NormalizedEmail] IS NOT NULL");
+
+        builder.Entity<Expense>()
+            .HasIndex(e => new { e.GroupId, e.ExpenseDate });
+        builder.Entity<Expense>()
+            .HasIndex(e => new { e.GroupId, e.CreatedAt });
+
+        #endregion
+
+        #region GroupMembers
+
         builder.Entity<GroupMember>()
             .HasKey(x => new { x.GroupId, x.MemberId });
 
@@ -49,7 +65,73 @@ public class ApplicationDbContext(DbContextOptions dbContextOptions)
             .HasOne(x => x.Member)
             .WithMany(x => x.GroupMembers)
             .HasForeignKey(x => x.MemberId);
-        // Group members END
+        // #endregion Group members END
+
+        #endregion
+
+        #region Expenses
+
+        builder.Entity<Expense>()
+            .HasOne(e => e.Group)
+            .WithMany(g => g.Expenses)
+            .HasForeignKey(x => x.GroupId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        builder.Entity<Expense>()
+            .HasOne(e => e.CreatedByMember)
+            .WithMany(m => m.CreatedExpenses)
+            .HasForeignKey(e => e.CreatedByMemberId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        builder.Entity<Expense>()
+            .Property(x => x.TotalAmount)
+            .HasPrecision(19, 4);
+
+        #endregion
+
+        #region ExpensePayment
+
+        builder.Entity<ExpensePayment>()
+            .HasKey(x => new { x.ExpenseId, x.PaidByMemberId });
+
+        builder.Entity<ExpensePayment>()
+            .Property(x => x.Amount)
+            .HasPrecision(19, 4);
+
+        builder.Entity<ExpensePayment>()
+            .HasOne(x => x.Expense)
+            .WithMany(x => x.Payments)
+            .HasForeignKey(x => x.ExpenseId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        builder.Entity<ExpensePayment>()
+            .HasOne(x => x.PaidByMember)
+            .WithMany(x => x.ExpensePayments)
+            .HasForeignKey(x => x.PaidByMemberId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        #endregion
+
+        #region ExpenseSplit
+
+        builder.Entity<ExpenseSplit>()
+            .HasKey(x => new { x.ExpenseId, x.OwedByMemberId });
+
+        builder.Entity<ExpenseSplit>()
+            .Property(x => x.Amount)
+            .HasPrecision(19, 4);
+
+        builder.Entity<ExpenseSplit>()
+            .HasOne(x => x.Expense)
+            .WithMany(x => x.Splits)
+            .HasForeignKey(x => x.ExpenseId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        builder.Entity<ExpenseSplit>()
+            .HasOne(x => x.OwedByMember)
+            .WithMany(x => x.ExpenseSplits)
+            .HasForeignKey(x => x.OwedByMemberId)
+            .OnDelete(DeleteBehavior.Restrict);
 
         #endregion
 

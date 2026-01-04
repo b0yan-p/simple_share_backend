@@ -1,11 +1,9 @@
 using System.ComponentModel.DataAnnotations;
-using Microsoft.EntityFrameworkCore;
 using simpleShare_backend.Models.Base;
 using simpleShare_backend.Models.Identity;
 
 namespace simpleShare_backend.Models.Domain;
 
-[Index(nameof(NormalizedEmail))]
 public class Member : BaseModel<Guid>, IDeletable, ICreatable, IModifiable
 {
     [Required]
@@ -26,4 +24,7 @@ public class Member : BaseModel<Guid>, IDeletable, ICreatable, IModifiable
     public Guid? UserId { get; set; }
     public User? User { get; set; }
     public ICollection<GroupMember> GroupMembers { get; } = [];
+    public ICollection<Expense> CreatedExpenses { get; } = [];
+    public ICollection<ExpensePayment> ExpensePayments { get; } = [];
+    public ICollection<ExpenseSplit> ExpenseSplits { get; } = [];
 }

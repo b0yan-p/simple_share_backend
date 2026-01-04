@@ -25,7 +25,8 @@ public class GroupService(IRepositoryAsync repo, IMemberService memberService, I
         var response = await _repo.CreateAsync<Group, Guid>(newGroup);
         var member = await memberService.GetMemberByUserIdAsync(userId);
 
-        if (member?.DeletedAt is not null) throw new Exception("Member with this id is deleted!");
+        if (member?.DeletedAt is not null)
+            throw new Exception("Member with this id is deleted!");
 
         if (member is null)
         {

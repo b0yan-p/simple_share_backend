@@ -7,6 +7,7 @@ namespace simpleShare_backend.Services;
 public interface IMemberService
 {
     Task<Member?> GetMemberAsync(Guid id);
+    Task<Member?> GetOrCreateVirtualMemberAsync(AddGroupMemberItemRequest input);
     // Task<Member> CreateMemberAsync(CreateMemberRequest input);
     Task<Member> CreateMemberFromUserAsync(User user);
     Task<Member?> GetMemberByUserIdAsync(Guid userId);

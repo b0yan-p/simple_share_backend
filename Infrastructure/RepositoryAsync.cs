@@ -52,7 +52,24 @@ public class RepositoryAsync(ApplicationDbContext dbContext) : IRepositoryAsync
             specification: spec
         );
 
-        // TODO once i add default methods i need uncomment this
+        if (ignoreDeleted && typeof(IDeletable).IsAssignableFrom(typeof(T)))
+            query = query.Where(e => ((IDeletable)e).DeletedAt == null);
+
+        T? entity = await query.FirstOrDefaultAsync(ct);
+        return entity;
+    }
+
+    public async Task<T?> GetSingleDefaultAsync<T>(
+        ISpecification<T> spec,
+        bool ignoreDeleted = false,
+        CancellationToken ct = default
+    ) where T : class
+    {
+        IQueryable<T> query = SpecificationEvaluator.Default.GetQuery(
+            query: dbContext.Set<T>(),
+            specification: spec
+        );
+
         if (ignoreDeleted && typeof(IDeletable).IsAssignableFrom(typeof(T)))
             query = query.Where(e => ((IDeletable)e).DeletedAt == null);
 
@@ -162,6 +179,12 @@ public class RepositoryAsync(ApplicationDbContext dbContext) : IRepositoryAsync
     public async Task<T> CreateWithCompositeId<T>(T entity) where T : class
     {
         _ = await dbContext.Set<T>().AddAsync(entity);
+        return entity;
+    }
+
+    public T UpdateWithCompositeId<T>(T entity) where T : class
+    {
+        _ = dbContext.Set<T>().Update(entity);
         return entity;
     }
 

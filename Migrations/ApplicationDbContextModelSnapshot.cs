@@ -188,6 +188,94 @@ namespace simpleShare_backend.Migrations
                     b.ToTable("Groups");
                 });
 
+            modelBuilder.Entity("simpleShare_backend.Models.Domain.Expense", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid>("CreatedByMemberId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<DateTime>("ExpenseDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid>("GroupId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime?>("ModifiedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<decimal>("TotalAmount")
+                        .HasPrecision(19, 4)
+                        .HasColumnType("decimal(19,4)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedByMemberId");
+
+                    b.HasIndex("GroupId", "CreatedAt");
+
+                    b.HasIndex("GroupId", "ExpenseDate");
+
+                    b.ToTable("Expenses");
+                });
+
+            modelBuilder.Entity("simpleShare_backend.Models.Domain.ExpensePayment", b =>
+                {
+                    b.Property<Guid>("ExpenseId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("PaidByMemberId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(19, 4)
+                        .HasColumnType("decimal(19,4)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("ExpenseId", "PaidByMemberId");
+
+                    b.HasIndex("PaidByMemberId");
+
+                    b.ToTable("ExpensePayments");
+                });
+
+            modelBuilder.Entity("simpleShare_backend.Models.Domain.ExpenseSplit", b =>
+                {
+                    b.Property<Guid>("ExpenseId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("OwedByMemberId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(19, 4)
+                        .HasColumnType("decimal(19,4)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("ExpenseId", "OwedByMemberId");
+
+                    b.HasIndex("OwedByMemberId");
+
+                    b.ToTable("ExpenseSplits");
+                });
+
             modelBuilder.Entity("simpleShare_backend.Models.Domain.GroupMember", b =>
                 {
                     b.Property<Guid>("GroupId")
@@ -254,7 +342,9 @@ namespace simpleShare_backend.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("NormalizedEmail");
+                    b.HasIndex("NormalizedEmail")
+                        .IsUnique()
+                        .HasFilter("[NormalizedEmail] IS NOT NULL");
 
                     b.HasIndex("UserId")
                         .IsUnique()
@@ -388,6 +478,63 @@ namespace simpleShare_backend.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("simpleShare_backend.Models.Domain.Expense", b =>
+                {
+                    b.HasOne("simpleShare_backend.Models.Domain.Member", "CreatedByMember")
+                        .WithMany("CreatedExpenses")
+                        .HasForeignKey("CreatedByMemberId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("simpleShare_backend.Domain.Group", "Group")
+                        .WithMany("Expenses")
+                        .HasForeignKey("GroupId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("CreatedByMember");
+
+                    b.Navigation("Group");
+                });
+
+            modelBuilder.Entity("simpleShare_backend.Models.Domain.ExpensePayment", b =>
+                {
+                    b.HasOne("simpleShare_backend.Models.Domain.Expense", "Expense")
+                        .WithMany("Payments")
+                        .HasForeignKey("ExpenseId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("simpleShare_backend.Models.Domain.Member", "PaidByMember")
+                        .WithMany("ExpensePayments")
+                        .HasForeignKey("PaidByMemberId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Expense");
+
+                    b.Navigation("PaidByMember");
+                });
+
+            modelBuilder.Entity("simpleShare_backend.Models.Domain.ExpenseSplit", b =>
+                {
+                    b.HasOne("simpleShare_backend.Models.Domain.Expense", "Expense")
+                        .WithMany("Splits")
+                        .HasForeignKey("ExpenseId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("simpleShare_backend.Models.Domain.Member", "OwedByMember")
+                        .WithMany("ExpenseSplits")
+                        .HasForeignKey("OwedByMemberId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Expense");
+
+                    b.Navigation("OwedByMember");
+                });
+
             modelBuilder.Entity("simpleShare_backend.Models.Domain.GroupMember", b =>
                 {
                     b.HasOne("simpleShare_backend.Domain.Group", "Group")
@@ -418,11 +565,26 @@ namespace simpleShare_backend.Migrations
 
             modelBuilder.Entity("simpleShare_backend.Domain.Group", b =>
                 {
+                    b.Navigation("Expenses");
+
                     b.Navigation("GroupMembers");
+                });
+
+            modelBuilder.Entity("simpleShare_backend.Models.Domain.Expense", b =>
+                {
+                    b.Navigation("Payments");
+
+                    b.Navigation("Splits");
                 });
 
             modelBuilder.Entity("simpleShare_backend.Models.Domain.Member", b =>
                 {
+                    b.Navigation("CreatedExpenses");
+
+                    b.Navigation("ExpensePayments");
+
+                    b.Navigation("ExpenseSplits");
+
                     b.Navigation("GroupMembers");
                 });
 

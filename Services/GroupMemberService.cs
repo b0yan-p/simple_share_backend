@@ -57,12 +57,36 @@ public class GroupMemberService(
         return [.. members.Select(x => x.ToResponse())];
     }
 
-    public async Task<GroupMember> RemoveGroupMemberAsync(Guid groupId, Guid memberId)
+    public async Task<GroupMember> GetGroupMemberAsync(Guid groupId, Guid memberId)
     {
         var gm = await groupMemberRepo.GetGroupMemberDefaultAsync(groupId, memberId)
-            ?? throw new Exception("Member does not exist!");
+            ?? throw new Exception("Member does not exist");
 
-        if (gm.LeftAt is not null)
+        if (gm.LeftAt is not null || gm.GroupMemberStatus == GroupMemberStatus.Deleted)
+            throw new Exception("Member does not exist in this group");
+
+        return gm;
+    }
+
+    public async Task<GroupMember> RemoveGroupMemberAsync(Guid groupId, Guid memberId, Guid userId)
+    {
+        _ = await groupService.GetGroupAsync(groupId)
+           ?? throw new Exception("Group does not exist");
+
+        var memberOwner = await memberService.GetMemberByUserIdAsync(userId)
+            ?? throw new Exception("Not authorized to remove members");
+
+        var groupMemberOwner = await GetGroupMemberAsync(groupId, memberOwner.Id);
+        if (groupMemberOwner is null || groupMemberOwner.GroupRole != GroupRole.Owner)
+            throw new Exception("Not authorized to remove members");
+
+        if (memberId == groupMemberOwner.MemberId)
+            throw new Exception("You cannot remove yourself from group");
+
+        var gm = await groupMemberRepo.GetGroupMemberDefaultAsync(groupId, memberId)
+            ?? throw new Exception("Member does not exist in this group!");
+
+        if (gm.LeftAt is not null || gm.GroupMemberStatus == GroupMemberStatus.Deleted)
             throw new Exception("Member is already removed from group");
 
         gm.LeftAt = DateTime.UtcNow;

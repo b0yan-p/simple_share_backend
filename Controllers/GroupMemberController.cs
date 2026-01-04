@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using Microsoft.AspNetCore.Mvc;
 using simpleShare_backend.Contracts.Member;
 using simpleShare_backend.Services;
@@ -23,8 +24,14 @@ public class GroupMemberController(
     [Route("members/{memberId}")]
     public async Task<IActionResult> RemoveMemberFromGroupAsync([FromRoute] Guid groupId, [FromRoute] Guid memberId)
     {
-        await groupMemberService.RemoveGroupMemberAsync(groupId, memberId);
-        return Ok();
+        string? id = User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+        if (id is not null && Guid.TryParse(id, out Guid userId))
+        {
+            await groupMemberService.RemoveGroupMemberAsync(groupId, memberId, userId);
+            return Ok();
+        }
+        return Forbid();
     }
 
     [HttpGet]

@@ -44,10 +44,23 @@ public class ApplicationDbContext(DbContextOptions dbContextOptions)
             .IsUnique()
             .HasFilter("[NormalizedEmail] IS NOT NULL");
 
+        builder.Entity<GroupMember>()
+            .HasIndex(x => new { x.GroupId, x.MemberId })
+            .HasFilter("[LeftAt] IS NULL AND [GroupMemberStatus] <> 0");
+
         builder.Entity<Expense>()
             .HasIndex(e => new { e.GroupId, e.ExpenseDate });
         builder.Entity<Expense>()
             .HasIndex(e => new { e.GroupId, e.CreatedAt });
+        builder.Entity<Expense>()
+            .HasIndex(e => e.GroupId)
+            .HasFilter("[DeletedAt] IS NULL");
+
+        builder.Entity<ExpensePayment>()
+            .HasIndex(e => new { e.PaidByMemberId, e.ExpenseId });
+
+        builder.Entity<ExpenseSplit>()
+        .HasIndex(e => new { e.OwedByMemberId, e.ExpenseId });
 
         #endregion
 

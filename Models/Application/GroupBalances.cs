@@ -4,4 +4,5 @@ public class GroupBalances
 {
     public Guid GroupId { get; init; }
     public IReadOnlyList<MemberBalance> Members { get; init; } = [];
+    public IReadOnlyList<DebtEdge> Debts { get; set; } = [];
 }

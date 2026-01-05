@@ -124,7 +124,8 @@ public class GroupService(IRepositoryAsync repo,
         return new()
         {
             GroupId = groupId,
-            Members = result.Members
+            Members = result.Members,
+            Debts = result.Debts
         };
     }
 }

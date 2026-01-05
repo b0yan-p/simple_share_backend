@@ -10,4 +10,5 @@ public interface IGroupMemberService
     Task<GroupMember?> AddExistingMemberIntoGroupAsync(Guid memberId, Guid groupId);
     Task<GroupMember> RemoveGroupMemberAsync(Guid groupId, Guid memberId, Guid userId);
     Task<ICollection<GroupMemberResponse>> GetAllGroupMembersAsync(Guid groupId);
+    Task<ICollection<GroupMember>> GetAllGroupMembersDefaultAsync(Guid groupId);
 }

@@ -212,4 +212,10 @@ public class RepositoryAsync(ApplicationDbContext dbContext) : IRepositoryAsync
 
         return query;
     }
+
+    public async Task<ICollection<T>> AddRangeAsync<T>(ICollection<T> items) where T : class
+    {
+        await dbContext.AddRangeAsync(items);
+        return items;
+    }
 }

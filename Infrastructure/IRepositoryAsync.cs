@@ -59,5 +59,6 @@ public interface IRepositoryAsync
 
     Task<T> CreateWithCompositeId<T>(T entity) where T : class;
     T UpdateWithCompositeId<T>(T entity) where T : class;
+    Task<ICollection<T>> AddRangeAsync<T>(ICollection<T> items) where T : class;
     Task<int> SaveChangesAsync();
 }

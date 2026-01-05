@@ -57,6 +57,14 @@ public class GroupMemberService(
         return [.. members.Select(x => x.ToResponse())];
     }
 
+    public async Task<ICollection<GroupMember>> GetAllGroupMembersDefaultAsync(Guid groupId)
+    {
+        _ = await groupService.GetGroupAsync(groupId)
+             ?? throw new Exception("Group does not exist!");
+
+        return await groupMemberRepo.GetAllAsync(groupId);
+    }
+
     public async Task<GroupMember> GetGroupMemberAsync(Guid groupId, Guid memberId)
     {
         var gm = await groupMemberRepo.GetGroupMemberDefaultAsync(groupId, memberId)

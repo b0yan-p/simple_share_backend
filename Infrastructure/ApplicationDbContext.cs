@@ -58,6 +58,11 @@ public class ApplicationDbContext(DbContextOptions dbContextOptions)
 
         builder.Entity<ExpensePayment>()
             .HasIndex(e => new { e.PaidByMemberId, e.ExpenseId });
+        builder.Entity<ExpensePayment>()
+            .HasIndex(e => e.PaidByMemberId);
+
+        builder.Entity<ExpenseSplit>()
+            .HasIndex(e => e.OwedByMemberId);
 
         builder.Entity<ExpenseSplit>()
         .HasIndex(e => new { e.OwedByMemberId, e.ExpenseId });

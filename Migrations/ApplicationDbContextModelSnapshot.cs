@@ -225,6 +225,9 @@ namespace simpleShare_backend.Migrations
 
                     b.HasIndex("CreatedByMemberId");
 
+                    b.HasIndex("GroupId")
+                        .HasFilter("[DeletedAt] IS NULL");
+
                     b.HasIndex("GroupId", "CreatedAt");
 
                     b.HasIndex("GroupId", "ExpenseDate");
@@ -251,6 +254,8 @@ namespace simpleShare_backend.Migrations
 
                     b.HasIndex("PaidByMemberId");
 
+                    b.HasIndex("PaidByMemberId", "ExpenseId");
+
                     b.ToTable("ExpensePayments");
                 });
 
@@ -272,6 +277,8 @@ namespace simpleShare_backend.Migrations
                     b.HasKey("ExpenseId", "OwedByMemberId");
 
                     b.HasIndex("OwedByMemberId");
+
+                    b.HasIndex("OwedByMemberId", "ExpenseId");
 
                     b.ToTable("ExpenseSplits");
                 });
@@ -299,6 +306,9 @@ namespace simpleShare_backend.Migrations
                     b.HasKey("GroupId", "MemberId");
 
                     b.HasIndex("MemberId");
+
+                    b.HasIndex("GroupId", "MemberId")
+                        .HasFilter("[LeftAt] IS NULL AND [GroupMemberStatus] <> 0");
 
                     b.ToTable("GroupMembers");
                 });

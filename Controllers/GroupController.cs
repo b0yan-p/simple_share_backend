@@ -3,12 +3,15 @@ using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using simpleShare_backend.Common;
+using simpleShare_backend.Common.Extensions;
+using simpleShare_backend.Contracts.Balances;
 using simpleShare_backend.Contracts.Group;
 using simpleShare_backend.Services;
 
 namespace simpleShare_backend.Controllers;
 
 [ApiController]
+[Authorize]
 [Route("api/[controller]")]
 public class GroupController(IGroupService service) : ControllerBase
 {
@@ -69,5 +72,12 @@ public class GroupController(IGroupService service) : ControllerBase
     {
         var response = await service.RestoreGroupAsync(groupId);
         return Ok(response);
+    }
+
+    [HttpGet]
+    [Route("{groupId}/balances")]
+    public async Task<BalanceResponse> GetGroupBalanceAsync([FromRoute] Guid groupId)
+    {
+        return await service.GetGroupBalancesAsync(groupId, User.GetUserId());
     }
 }

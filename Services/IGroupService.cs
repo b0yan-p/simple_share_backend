@@ -1,4 +1,5 @@
 using simpleShare_backend.Common;
+using simpleShare_backend.Contracts.Balances;
 using simpleShare_backend.Contracts.Group;
 
 namespace simpleShare_backend.Services;
@@ -11,4 +12,6 @@ public interface IGroupService
     Task<PageResponse<GroupResponse>> GetMyGroupsAsync(int skip, int take, string? query = "");
     Task<GroupResponse> DeleteGroupAsync(Guid id);
     Task<GroupResponse> RestoreGroupAsync(Guid id);
+    // Balances
+    Task<BalanceResponse> GetGroupBalancesAsync(Guid groupId, Guid userId);
 }

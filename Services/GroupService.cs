@@ -5,10 +5,15 @@ using simpleShare_backend.Services.Specifications;
 using simpleShare_backend.Common;
 using simpleShare_backend.Common.Extensions;
 using simpleShare_backend.Models.Domain;
+using simpleShare_backend.Contracts.Balances;
 
 namespace simpleShare_backend.Services;
 
-public class GroupService(IRepositoryAsync repo, IMemberService memberService, IUserService userService) : IGroupService
+public class GroupService(IRepositoryAsync repo,
+    IMemberService memberService,
+    IUserService userService,
+    IBalanceService balanceService
+) : IGroupService
 {
     private readonly IRepositoryAsync _repo = repo;
 
@@ -107,5 +112,19 @@ public class GroupService(IRepositoryAsync repo, IMemberService memberService, I
 
         PageResponse<GroupResponse> mappedResult = new(list, result.TotalCount, skip, take);
         return mappedResult;
+    }
+
+    public async Task<BalanceResponse> GetGroupBalancesAsync(Guid groupId, Guid userId)
+    {
+        var _ = await GetGroupAsync(groupId)
+            ?? throw new Exception("Group does not exist!");
+
+        var result = await balanceService.GetGroupBalancesAsync(groupId, userId);
+
+        return new()
+        {
+            GroupId = groupId,
+            Members = result.Members
+        };
     }
 }

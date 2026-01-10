@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using simpleShare_backend.Common;
 using simpleShare_backend.Common.Extensions;
 using simpleShare_backend.Contracts.Expenses;
 using simpleShare_backend.Services;
@@ -23,6 +24,17 @@ public class ExpenseController(IExpenseService service) : ControllerBase
 
         var result = await service.SaveExpenseAsync(groupId, request, User!.GetUserId());
         return result;
+    }
+
+    [HttpGet]
+    [Route("{groupId}")]
+    public Task<PageResponse<ExpenseListResponse>> GetGroupExpensesAsync(
+        [FromRoute] Guid groupId,
+        [FromQuery] int skip,
+        [FromQuery] int take
+    )
+    {
+        return service.GetGroupExpenseListAsync(groupId, User.GetUserId(), skip, take);
     }
 }
 

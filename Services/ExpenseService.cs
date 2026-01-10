@@ -1,4 +1,7 @@
+using Microsoft.EntityFrameworkCore;
+using simpleShare_backend.Common;
 using simpleShare_backend.Contracts.Expenses;
+using simpleShare_backend.Data;
 using simpleShare_backend.Infrastructure;
 using simpleShare_backend.Models.Domain;
 using simpleShare_backend.Models.Enums;
@@ -6,6 +9,7 @@ using simpleShare_backend.Models.Enums;
 namespace simpleShare_backend.Services;
 
 public class ExpenseService(
+    ApplicationDbContext db,
     IRepositoryAsync repo,
     IGroupService groupService,
     IMemberService memberService,
@@ -133,6 +137,59 @@ public class ExpenseService(
         return await repo.AddRangeAsync(splitsToCreate);
     }
 
+    public async Task<PageResponse<ExpenseListResponse>> GetGroupExpenseListAsync(
+         Guid groupId,
+         Guid userId,
+         int skip,
+         int take
+    )
+    {
+        var meMember = await memberService.GetMemberByUserIdAsync(userId)
+            ?? throw new Exception("Member not found!");
+
+        _ = await groupMemberService.GetGroupMemberAsync(groupId, meMember.Id)
+            ?? throw new Exception("Not a group member!");
+
+        var expenses = await db.Expenses
+            .AsNoTracking()
+            .Where(e => e.DeletedAt == null && e.GroupId == groupId)
+            .OrderByDescending(e => e.ExpenseDate)
+            .ThenByDescending(e => e.Id)
+            .Skip(skip)
+            .Take(take)
+            .Select(e => new
+            {
+                e.Id,
+                e.Description,
+                e.ExpenseDate,
+                e.TotalAmount,
+
+                PaidByMembers = e.Payments.Select(p => p.PaidByMember.DisplayName),
+                PaidSum = e.Payments
+                    .Where(p => p.PaidByMemberId == meMember.Id)
+                    .Sum(p => (decimal?)p.Amount) ?? 0m,
+                SplitSum = e.Splits
+                    .Where(s => s.OwedByMemberId == meMember.Id)
+                    .Sum(s => (decimal?)s.Amount) ?? 0m,
+            })
+            .AsSplitQuery()
+            .ToListAsync();
+
+        var result = expenses.Select(e => new ExpenseListResponse()
+        {
+            Id = e.Id,
+            Description = e.Description,
+            ExpenseDate = e.ExpenseDate,
+            Amount = Math.Round(e.TotalAmount, 2, MidpointRounding.AwayFromZero),
+            PaidByMembers = [.. e.PaidByMembers],
+            Net = Math.Round(e.PaidSum - e.SplitSum, 2, MidpointRounding.AwayFromZero)
+        })
+        .ToList();
+
+        var count = await db.Expenses.Where(e => e.DeletedAt == null && e.GroupId == groupId).CountAsync();
+
+        return new PageResponse<ExpenseListResponse>(result, count, skip, take);
+    }
 
     public async Task<bool> SaveExpenseAsync(Guid groupId, ExpenseRequest request, Guid userId)
     {

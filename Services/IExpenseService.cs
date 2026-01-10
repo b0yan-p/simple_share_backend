@@ -1,3 +1,4 @@
+using simpleShare_backend.Common;
 using simpleShare_backend.Contracts.Expenses;
 using simpleShare_backend.Models.Domain;
 
@@ -12,10 +13,16 @@ public interface IExpenseService
         ExpenseRequest request
     );
     Task<ICollection<ExpenseSplit>> CreateExpenseSplitsAsync(
-    Expense expense,
-    IReadOnlySet<Guid> activeMemberIds,
-    ExpenseRequest request
-);
+        Expense expense,
+        IReadOnlySet<Guid> activeMemberIds,
+        ExpenseRequest request
+    );
     Task<Expense> CreateExpenseAsync(Guid groupId, ExpenseRequest request, GroupMember owner);
 
+    Task<PageResponse<ExpenseListResponse>> GetGroupExpenseListAsync(
+        Guid groupId,
+        Guid userId,
+        int skip,
+        int take
+    );
 }

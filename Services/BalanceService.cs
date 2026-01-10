@@ -20,21 +20,16 @@ public class BalanceService(
             .Where(gm =>
                 gm.GroupId == groupId
                 && gm.MemberId == myMember.Id
-                && gm.LeftAt == null
-                && gm.GroupMemberStatus != GroupMemberStatus.Deleted
             )
             .AnyAsync(cancellationToken: ct);
 
         if (!isActive)
             throw new Exception("You are not an active member of this group.");
 
-        // TODO what we gonna do with members that have some debt but they are not active???
         var activeMembers = await db.GroupMembers
             .AsNoTracking()
             .Where(
                 x => x.GroupId == groupId
-                && x.LeftAt == null
-                && x.GroupMemberStatus != GroupMemberStatus.Deleted
             )
             .Select(x => new
             {
@@ -42,10 +37,6 @@ public class BalanceService(
                 x.Member.DisplayName,
             })
             .ToListAsync(ct);
-
-        var activeIds = activeMembers
-            .Select(x => x.MemberId)
-            .ToHashSet();
 
         var names = activeMembers.ToDictionary(x => x.MemberId, x => x.DisplayName);
 
@@ -57,8 +48,7 @@ public class BalanceService(
         var paidRows = await db.ExpensePayments
         .AsNoTracking()
         .Where(p =>
-            activeIds.Contains(p.PaidByMemberId)
-            && p.Expense.GroupId == groupId
+            p.Expense.GroupId == groupId
             && p.Expense.DeletedAt == null
         )
         .GroupBy(p => p.PaidByMemberId)
@@ -75,8 +65,7 @@ public class BalanceService(
         var owedRows = await db.ExpenseSplits
             .AsNoTracking()
             .Where(s =>
-                activeIds.Contains(s.OwedByMemberId)
-                && s.Expense.GroupId == groupId
+                s.Expense.GroupId == groupId
                 && s.Expense.DeletedAt == null
             )
             .GroupBy(s => s.OwedByMemberId)
@@ -112,7 +101,6 @@ public class BalanceService(
         var totalPaidQuery = db.ExpensePayments
             .AsNoTracking()
             .Where(p =>
-                activeIds.Contains(p.PaidByMemberId) &&
                 p.Expense.GroupId == groupId &&
                 p.Expense.DeletedAt == null
             )
@@ -128,14 +116,13 @@ public class BalanceService(
         var debtRows = await db.ExpenseSplits
             .AsNoTracking()
             .Where(s =>
-                activeIds.Contains(s.OwedByMemberId)
-                && s.Expense.GroupId == groupId
+                // activeIds.Contains(s.OwedByMemberId) &&
+                s.Expense.GroupId == groupId
                 && s.Expense.DeletedAt == null
             ).Join(
                 db.ExpensePayments
                     .AsNoTracking()
                     .Where(p =>
-                        activeIds.Contains(p.PaidByMemberId) &&
                         p.Expense.GroupId == groupId &&
                         p.Expense.DeletedAt == null
                     ),
@@ -197,6 +184,38 @@ public class BalanceService(
             Members = members,
             Debts = debtsNet
         };
+    }
+
+    public async Task<(decimal paid, decimal owed, decimal net)>
+    GetMemberNetInGroupAsync(
+        Guid groupId,
+        Guid memberId
+    )
+    {
+        var paid = await db.ExpensePayments
+            .AsNoTracking()
+            .Where(x =>
+                x.PaidByMemberId == memberId &&
+                x.Expense.GroupId == groupId &&
+                x.Expense.DeletedAt == null
+            )
+            .SumAsync(x => (decimal?)x.Amount) ?? 0m;
+
+        var owed = await db.ExpenseSplits
+            .AsNoTracking()
+            .Where(x =>
+                x.OwedByMemberId == memberId &&
+                x.Expense.GroupId == groupId &&
+                x.Expense.DeletedAt == null
+            )
+            .SumAsync(x => (decimal?)x.Amount) ?? 0m;
+
+        paid = Math.Round(paid, 2, MidpointRounding.AwayFromZero);
+        owed = Math.Round(owed, 2, MidpointRounding.AwayFromZero);
+
+        var net = paid - owed;
+
+        return (paid, owed, net);
     }
 
     private static List<DebtEdge> BuildNetDebts(

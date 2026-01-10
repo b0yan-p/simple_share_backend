@@ -9,7 +9,8 @@ namespace simpleShare_backend.Services;
 public class GroupMemberService(
     IMemberService memberService,
     IGroupService groupService,
-    IGroupMemberRepository groupMemberRepo
+    IGroupMemberRepository groupMemberRepo,
+    IBalanceService balanceService
 ) : IGroupMemberService
 {
     public async Task<GroupMember?> AddExistingMemberIntoGroupAsync(Guid memberId, Guid groupId)
@@ -101,6 +102,11 @@ public class GroupMemberService(
 
         if (gm.LeftAt is not null || gm.GroupMemberStatus == GroupMemberStatus.Deleted)
             throw new Exception("Member is already removed from group");
+
+        var (paid, owed, net) = await balanceService.GetMemberNetInGroupAsync(groupId, memberId);
+
+        if (Math.Abs(net) >= 0.01m)
+            throw new Exception($"Member cannot leave group. Net is {net:0.00} (Paid {paid:0.00}, Owed {owed:0.00}).");
 
         gm.LeftAt = DateTime.UtcNow;
         gm.GroupMemberStatus = GroupMemberStatus.Deleted;

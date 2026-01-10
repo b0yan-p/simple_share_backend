@@ -145,8 +145,10 @@ public class ExpenseService(
 
         var activeMemberIds = activeMembers.Select(x => x.MemberId).ToHashSet();
 
-        var gm = activeMembers.Where(e => e.Member.UserId == userId).FirstOrDefault()
-            ?? throw new Exception("Member is not in the group!");
+        var gm = activeMembers
+            .Where(e => e.Member.UserId == userId)
+            .FirstOrDefault()
+                ?? throw new Exception("Member is not in the group!");
 
         var expense = await CreateExpenseAsync(groupId, request, gm)
             ?? throw new Exception("Exception failed to create");

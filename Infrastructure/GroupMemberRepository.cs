@@ -43,4 +43,11 @@ public class GroupMemberRepository(ApplicationDbContext db) : IGroupMemberReposi
     {
         return await db.SaveChangesAsync();
     }
+
+    public async Task<int> GetGroupMemberCountAsync(Guid groupId)
+    {
+        return await db.GroupMembers
+            .Where(x => x.GroupId == groupId && x.LeftAt == null && x.GroupMemberStatus != GroupMemberStatus.Deleted)
+            .CountAsync();
+    }
 }

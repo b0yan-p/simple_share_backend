@@ -11,4 +11,5 @@ public interface IGroupMemberService
     Task<GroupMember> RemoveGroupMemberAsync(Guid groupId, Guid memberId, Guid userId);
     Task<ICollection<GroupMemberResponse>> GetAllGroupMembersAsync(Guid groupId);
     Task<ICollection<GroupMember>> GetAllGroupMembersDefaultAsync(Guid groupId);
+    Task<int> GetGroupMemberCountAsync(Guid groupId);
 }

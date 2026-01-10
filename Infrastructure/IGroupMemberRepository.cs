@@ -9,4 +9,5 @@ public interface IGroupMemberRepository
     Task<GroupMember> CreateGroupMemberAsync(GroupMember item);
     GroupMember UpdateGroupMember(GroupMember item);
     Task<int> SaveChangesAsync();
+    Task<int> GetGroupMemberCountAsync(Guid groupId);
 }

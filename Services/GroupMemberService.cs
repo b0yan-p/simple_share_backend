@@ -76,6 +76,11 @@ public class GroupMemberService(
         return gm;
     }
 
+    public async Task<int> GetGroupMemberCountAsync(Guid groupId)
+    {
+        return await groupMemberRepo.GetGroupMemberCountAsync(groupId);
+    }
+
     public async Task<GroupMember> RemoveGroupMemberAsync(Guid groupId, Guid memberId, Guid userId)
     {
         _ = await groupService.GetGroupAsync(groupId)

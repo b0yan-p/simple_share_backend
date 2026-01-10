@@ -80,4 +80,11 @@ public class GroupController(IGroupService service) : ControllerBase
     {
         return await service.GetGroupBalancesAsync(groupId, User.GetUserId());
     }
+
+    [HttpGet]
+    [Route("{groupId}/overview")]
+    public async Task<GroupOverviewResponse> GetGroupOverview([FromRoute] Guid groupId)
+    {
+        return await service.GetGroupOverviewAsync(groupId, User.GetUserId());
+    }
 }

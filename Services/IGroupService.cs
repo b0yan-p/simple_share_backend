@@ -12,6 +12,6 @@ public interface IGroupService
     Task<PageResponse<GroupResponse>> GetMyGroupsAsync(int skip, int take, string? query = "");
     Task<GroupResponse> DeleteGroupAsync(Guid id);
     Task<GroupResponse> RestoreGroupAsync(Guid id);
-    // Balances
     Task<BalanceResponse> GetGroupBalancesAsync(Guid groupId, Guid userId);
+    Task<GroupOverviewResponse> GetGroupOverviewAsync(Guid groupId, Guid userId);
 }

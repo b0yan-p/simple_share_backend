@@ -217,6 +217,9 @@ namespace simpleShare_backend.Migrations
                     b.Property<DateTime?>("ModifiedAt")
                         .HasColumnType("datetime2");
 
+                    b.Property<Guid?>("ModifiedByMemberId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<decimal>("TotalAmount")
                         .HasPrecision(19, 4)
                         .HasColumnType("decimal(19,4)");

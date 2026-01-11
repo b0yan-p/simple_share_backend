@@ -18,14 +18,7 @@ public class ExpenseService(
 {
     public async Task<Expense> CreateExpenseAsync(Guid groupId, ExpenseRequest request, GroupMember owner)
     {
-        if (string.IsNullOrEmpty(request.Description))
-            throw new Exception("Description is required");
-
-        if (request.ExpenseDate == default)
-            throw new Exception("Expense date is required");
-
-        if (request.TotalAmount <= 0)
-            throw new Exception("Total amount must be greater than 0");
+        ValidateExpenseRequest(request);
 
         _ = await groupService.GetGroupAsync(groupId)
             ?? throw new Exception("Group does not exist");
@@ -59,14 +52,14 @@ public class ExpenseService(
             throw new Exception("Payments are required!");
 
         if (payments.Any(p => p.Amount <= 0))
-            throw new Exception("Payment amount must be greater than ");
+            throw new Exception("Payment amount must be greater than 0");
 
         var paymentMemberIds = payments
             .Select(x => x.MemberId)
             .ToList();
 
         if (paymentMemberIds.Distinct().Count() != payments.Count)
-            throw new Exception("Payment list mys be unique");
+            throw new Exception("Payment list must be unique");
 
         if (paymentMemberIds.Any(id => !activeMemberIds.Contains(id)))
             throw new Exception("Payment list contains deleted group members");
@@ -150,20 +143,31 @@ public class ExpenseService(
                 .ThenInclude(p => p.PaidByMember)
             .Include(e => e.Splits)
                 .ThenInclude(p => p.OwedByMember)
+            .Include(e => e.CreatedByMember)
+            .Include(e => e.ModifiedByMember)
             .FirstOrDefaultAsync();
 
         if (expense == null)
-            throw new Exception("Expense does not found");
-
-        if (expense.GroupId != groupId)
-            throw new Exception("Unauthorized access!");
+            throw new Exception("Expense not found!");
 
         return new ExpenseResponse()
         {
             Id = expense.Id,
-            Amount = expense.TotalAmount,
+            Amount = Math.Round(expense.TotalAmount, 2, MidpointRounding.AwayFromZero),
             Description = expense.Description,
             ExpenseDate = expense.ExpenseDate,
+            CreatedInfo = new ExpenseLogResponse()
+            {
+                MemberId = expense.CreatedByMemberId,
+                MemberName = expense.CreatedByMember.DisplayName,
+                ModificationDate = expense.CreatedAt
+            },
+            ModifiedInfo = expense.ModifiedByMemberId == null ? null : new ExpenseLogResponse()
+            {
+                MemberId = expense.ModifiedByMemberId.Value,
+                MemberName = expense.ModifiedByMember.DisplayName,
+                ModificationDate = expense.ModifiedAt!.Value
+            },
             PaidBy = [.. expense.Payments.Select(p => new ExpenseMemberAmountResponse()
             {
                 Amount = Math.Round(p.Amount, 2, MidpointRounding.AwayFromZero),
@@ -233,9 +237,55 @@ public class ExpenseService(
         return new PageResponse<ExpenseListResponse>(result, count, skip, take);
     }
 
-    public async Task<bool> SaveExpenseAsync(Guid groupId, ExpenseRequest request, Guid userId)
+    public async Task<ExpenseResponse> UpdateExpenseAsync(Guid groupId, ExpenseRequest request, Guid userId)
     {
-        var member = await memberService.GetMemberByUserIdAsync(userId)
+        ValidateExpenseRequest(request);
+
+        var meMember = await memberService.GetMemberByUserIdAsync(userId)
+            ?? throw new Exception("Member not found in group");
+
+        var isMember = await groupMemberService.IsUserGroupMember(groupId, userId);
+        if (!isMember)
+            throw new Exception("Unauthorized access!");
+
+        var dbExpense = await db.Expenses
+            .Where(x => x.Id == request.Id && x.GroupId == groupId && x.DeletedAt == null)
+            .FirstOrDefaultAsync()
+            ?? throw new Exception("Expense not found!");
+
+        await using var tx = await db.Database.BeginTransactionAsync();
+
+        dbExpense.ModifiedAt = DateTime.UtcNow;
+        dbExpense.Description = request.Description;
+        dbExpense.ExpenseDate = request.ExpenseDate;
+        dbExpense.ModifiedByMemberId = meMember.Id;
+        dbExpense.TotalAmount = request.TotalAmount;
+
+        await DeleteExpensePayments(dbExpense.Id);
+        await DeleteExpenseSplits(dbExpense.Id);
+
+        var groupMembers = await groupMemberService.GetAllGroupMembersDefaultAsync(groupId);
+        var activeMemberIds = groupMembers
+                    .Where(x =>
+                        x.GroupMemberStatus != GroupMemberStatus.Deleted &&
+                        x.LeftAt is null
+                    )
+                    .Select(x => x.MemberId)
+                    .ToHashSet();
+
+        await CreateExpensePaymentsAsync(dbExpense, activeMemberIds, request);
+        await CreateExpenseSplitsAsync(dbExpense, activeMemberIds, request);
+
+        await repo.SaveChangesAsync();
+        var result = await GetExpenseAsync(groupId, dbExpense.Id, userId);
+        await tx.CommitAsync();
+
+        return result;
+    }
+
+    public async Task<ExpenseResponse> SaveExpenseAsync(Guid groupId, ExpenseRequest request, Guid userId)
+    {
+        _ = await memberService.GetMemberByUserIdAsync(userId)
             ?? throw new Exception("Member does not exist!");
 
         var groupMembers = await groupMemberService.GetAllGroupMembersDefaultAsync(groupId);
@@ -256,6 +306,33 @@ public class ExpenseService(
         await CreateExpenseSplitsAsync(expense, activeMemberIds, request);
 
         await repo.SaveChangesAsync();
-        return true;
+
+        return await GetExpenseAsync(groupId, expense.Id, userId);
+    }
+
+    private void ValidateExpenseRequest(ExpenseRequest request)
+    {
+        if (string.IsNullOrEmpty(request.Description))
+            throw new Exception("Description is required");
+
+        if (request.ExpenseDate == default)
+            throw new Exception("Expense date is required");
+
+        if (request.TotalAmount <= 0)
+            throw new Exception("Total amount must be greater than 0");
+    }
+
+    private async Task DeleteExpensePayments(Guid expenseId)
+    {
+        await db.ExpensePayments
+            .Where(ep => ep.ExpenseId == expenseId)
+            .ExecuteDeleteAsync();
+    }
+
+    private async Task DeleteExpenseSplits(Guid expenseId)
+    {
+        await db.ExpenseSplits
+            .Where(es => es.ExpenseId == expenseId)
+            .ExecuteDeleteAsync(); ;
     }
 }

@@ -4,6 +4,8 @@ namespace simpleShare_backend.Contracts.Expenses;
 
 public class ExpenseRequest
 {
+    public Guid? Id { get; set; }
+
     [MaxLength(200)]
     public required string Description { get; set; }
     required public DateTime ExpenseDate { get; set; }

@@ -14,7 +14,7 @@ public class ExpenseController(IExpenseService service) : ControllerBase
 {
     [HttpPost]
     [Route("{groupId}")]
-    public async Task<bool> AddExpenseAsync(
+    public async Task<ExpenseResponse> AddExpenseAsync(
         [FromRoute] Guid groupId,
         [FromBody] ExpenseRequest request
     )
@@ -28,13 +28,13 @@ public class ExpenseController(IExpenseService service) : ControllerBase
 
     [HttpGet]
     [Route("{groupId}")]
-    public Task<PageResponse<ExpenseListResponse>> GetGroupExpensesAsync(
+    public async Task<PageResponse<ExpenseListResponse>> GetGroupExpensesAsync(
         [FromRoute] Guid groupId,
         [FromQuery] int skip,
         [FromQuery] int take
     )
     {
-        return service.GetGroupExpenseListAsync(groupId, User.GetUserId(), skip, take);
+        return await service.GetGroupExpenseListAsync(groupId, User.GetUserId(), skip, take);
     }
 
     [HttpGet]
@@ -42,6 +42,16 @@ public class ExpenseController(IExpenseService service) : ControllerBase
     public async Task<ExpenseResponse> GetExpenseAsync([FromRoute] Guid groupId, [FromRoute] Guid expenseId)
     {
         return await service.GetExpenseAsync(groupId, expenseId, User.GetUserId());
+    }
+
+    [HttpPut]
+    [Route("{groupId}")]
+    public async Task<ExpenseResponse> UpdateExpenseAsync([FromRoute] Guid groupId, ExpenseRequest request)
+    {
+        if (!ModelState.IsValid)
+            throw new Exception("Invalid input");
+
+        return await service.UpdateExpenseAsync(groupId, request, User.GetUserId());
     }
 }
 

@@ -6,7 +6,7 @@ namespace simpleShare_backend.Services;
 
 public interface IExpenseService
 {
-    Task<bool> SaveExpenseAsync(Guid groupId, ExpenseRequest request, Guid userId);
+    Task<ExpenseResponse> SaveExpenseAsync(Guid groupId, ExpenseRequest request, Guid userId);
     Task<ICollection<ExpensePayment>> CreateExpensePaymentsAsync(
         Expense expense,
         IReadOnlySet<Guid> activeMemberIds,
@@ -18,7 +18,7 @@ public interface IExpenseService
         ExpenseRequest request
     );
     Task<Expense> CreateExpenseAsync(Guid groupId, ExpenseRequest request, GroupMember owner);
-
+    Task<ExpenseResponse> UpdateExpenseAsync(Guid groupId, ExpenseRequest request, Guid userId);
     Task<PageResponse<ExpenseListResponse>> GetGroupExpenseListAsync(
         Guid groupId,
         Guid userId,

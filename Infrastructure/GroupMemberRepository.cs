@@ -50,4 +50,29 @@ public class GroupMemberRepository(ApplicationDbContext db) : IGroupMemberReposi
             .Where(x => x.GroupId == groupId && x.LeftAt == null && x.GroupMemberStatus != GroupMemberStatus.Deleted)
             .CountAsync();
     }
+
+    public async Task<bool> IsGroupMemberAsync(Guid groupId, Guid memberId)
+    {
+        return await db.GroupMembers
+            .AsNoTracking()
+            .Where(gm =>
+                gm.GroupId == groupId &&
+                gm.MemberId == memberId &&
+                gm.LeftAt == null &&
+                gm.GroupMemberStatus != GroupMemberStatus.Deleted
+            ).AnyAsync();
+    }
+
+    public async Task<bool> IsUserGroupMember(Guid groupId, Guid userId)
+    {
+        return await db.GroupMembers
+            .AsNoTracking()
+            .Select(gm => new { gm.GroupId, gm.Member.UserId, gm.LeftAt, gm.GroupMemberStatus })
+            .Where(gm =>
+                gm.GroupId == groupId &&
+                gm.UserId == userId &&
+                gm.LeftAt == null &&
+                gm.GroupMemberStatus != GroupMemberStatus.Deleted
+            ).AnyAsync();
+    }
 }

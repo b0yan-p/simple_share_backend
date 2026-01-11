@@ -13,9 +13,4 @@ public class MyDebtEdge
     /// </summary>
     public decimal SignedAmount { get; set; }
     public decimal Amount => Math.Abs(SignedAmount);
-    public BalanceSide Side => SignedAmount > 0
-        ? BalanceSide.Creditor
-        : SignedAmount < 0
-            ? BalanceSide.Debtor
-            : BalanceSide.Settled;
 }

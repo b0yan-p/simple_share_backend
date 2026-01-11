@@ -36,5 +36,12 @@ public class ExpenseController(IExpenseService service) : ControllerBase
     {
         return service.GetGroupExpenseListAsync(groupId, User.GetUserId(), skip, take);
     }
+
+    [HttpGet]
+    [Route("{groupId}/{expenseId}")]
+    public async Task<ExpenseResponse> GetExpenseAsync([FromRoute] Guid groupId, [FromRoute] Guid expenseId)
+    {
+        return await service.GetExpenseAsync(groupId, expenseId, User.GetUserId());
+    }
 }
 

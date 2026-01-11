@@ -82,6 +82,16 @@ public class GroupMemberService(
         return await groupMemberRepo.GetGroupMemberCountAsync(groupId);
     }
 
+    public async Task<bool> IsGroupMemberAsync(Guid groupId, Guid memberId)
+    {
+        return await groupMemberRepo.IsGroupMemberAsync(groupId, memberId);
+    }
+
+    public async Task<bool> IsUserGroupMember(Guid groupId, Guid userId)
+    {
+        return await groupMemberRepo.IsUserGroupMember(groupId, userId);
+    }
+
     public async Task<GroupMember> RemoveGroupMemberAsync(Guid groupId, Guid memberId, Guid userId)
     {
         _ = await groupService.GetGroupAsync(groupId)

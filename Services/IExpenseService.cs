@@ -25,4 +25,6 @@ public interface IExpenseService
         int skip,
         int take
     );
+
+    Task<ExpenseResponse> GetExpenseAsync(Guid groupId, Guid expenseId, Guid userId);
 }

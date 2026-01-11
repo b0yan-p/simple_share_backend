@@ -12,4 +12,6 @@ public interface IGroupMemberService
     Task<ICollection<GroupMemberResponse>> GetAllGroupMembersAsync(Guid groupId);
     Task<ICollection<GroupMember>> GetAllGroupMembersDefaultAsync(Guid groupId);
     Task<int> GetGroupMemberCountAsync(Guid groupId);
+    Task<bool> IsGroupMemberAsync(Guid groupId, Guid memberId);
+    Task<bool> IsUserGroupMember(Guid groupId, Guid userId);
 }

@@ -10,4 +10,6 @@ public interface IGroupMemberRepository
     GroupMember UpdateGroupMember(GroupMember item);
     Task<int> SaveChangesAsync();
     Task<int> GetGroupMemberCountAsync(Guid groupId);
+    Task<bool> IsGroupMemberAsync(Guid groupId, Guid memberId);
+    Task<bool> IsUserGroupMember(Guid groupId, Guid userId);
 }

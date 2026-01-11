@@ -137,12 +137,54 @@ public class ExpenseService(
         return await repo.AddRangeAsync(splitsToCreate);
     }
 
+    public async Task<ExpenseResponse> GetExpenseAsync(Guid groupId, Guid expenseId, Guid userId)
+    {
+        var isMember = await groupMemberService.IsUserGroupMember(groupId, userId);
+
+        if (!isMember)
+            throw new Exception("Unauthorized access!");
+
+        var expense = await db.Expenses
+            .Where(e => e.Id == expenseId && e.GroupId == groupId && e.DeletedAt == null)
+            .Include(e => e.Payments)
+                .ThenInclude(p => p.PaidByMember)
+            .Include(e => e.Splits)
+                .ThenInclude(p => p.OwedByMember)
+            .FirstOrDefaultAsync();
+
+        if (expense == null)
+            throw new Exception("Expense does not found");
+
+        if (expense.GroupId != groupId)
+            throw new Exception("Unauthorized access!");
+
+        return new ExpenseResponse()
+        {
+            Id = expense.Id,
+            Amount = expense.TotalAmount,
+            Description = expense.Description,
+            ExpenseDate = expense.ExpenseDate,
+            PaidBy = [.. expense.Payments.Select(p => new ExpenseMemberAmountResponse()
+            {
+                Amount = Math.Round(p.Amount, 2, MidpointRounding.AwayFromZero),
+                MemberId = p.PaidByMemberId,
+                MemberName = p.PaidByMember.DisplayName
+            })],
+            SplittedBy = [.. expense.Splits.Select(s => new ExpenseMemberAmountResponse()
+            {
+                Amount = Math.Round(s.Amount, 2, MidpointRounding.AwayFromZero),
+                MemberId = s.OwedByMemberId,
+                MemberName = s.OwedByMember.DisplayName
+            })]
+        };
+    }
+
     public async Task<PageResponse<ExpenseListResponse>> GetGroupExpenseListAsync(
-         Guid groupId,
-         Guid userId,
-         int skip,
-         int take
-    )
+          Guid groupId,
+          Guid userId,
+          int skip,
+          int take
+     )
     {
         var meMember = await memberService.GetMemberByUserIdAsync(userId)
             ?? throw new Exception("Member not found!");

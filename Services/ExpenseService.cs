@@ -335,4 +335,24 @@ public class ExpenseService(
             .Where(es => es.ExpenseId == expenseId)
             .ExecuteDeleteAsync(); ;
     }
+
+    public async Task<bool> DeleteExpenseAsync(Guid groupId, Guid expenseId, Guid userId)
+    {
+        var isMember = await groupMemberService.IsUserGroupMember(groupId, userId);
+
+        if (!isMember)
+            throw new Exception("You are not group member!");
+
+        var expense = await db.Expenses
+            .Where(e => e.GroupId == groupId && e.Id == expenseId && e.DeletedAt == null)
+            .FirstOrDefaultAsync()
+            ?? throw new Exception("Expense not found!");
+
+        expense.DeletedAt = DateTime.UtcNow;
+        expense.ModifiedAt = DateTime.UtcNow;
+
+        await db.SaveChangesAsync();
+
+        return true;
+    }
 }

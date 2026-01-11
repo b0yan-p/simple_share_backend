@@ -27,4 +27,5 @@ public interface IExpenseService
     );
 
     Task<ExpenseResponse> GetExpenseAsync(Guid groupId, Guid expenseId, Guid userId);
+    Task<bool> DeleteExpenseAsync(Guid groupId, Guid expenseId, Guid userId);
 }

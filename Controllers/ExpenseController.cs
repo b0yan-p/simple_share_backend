@@ -53,5 +53,14 @@ public class ExpenseController(IExpenseService service) : ControllerBase
 
         return await service.UpdateExpenseAsync(groupId, request, User.GetUserId());
     }
+
+    [HttpDelete]
+    [Route("{groupId}/{expenseId}")]
+    public async Task<IActionResult> DeleteExpenseAsync([FromRoute] Guid groupId, [FromRoute] Guid expenseId)
+    {
+        var deleted = await service.DeleteExpenseAsync(groupId, expenseId, User.GetUserId());
+        if (!deleted) return NotFound();
+        return NoContent();
+    }
 }
 

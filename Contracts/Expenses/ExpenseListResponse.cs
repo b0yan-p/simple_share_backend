@@ -10,5 +10,6 @@ public class ExpenseListResponse
     public DateTime ExpenseDate { get; set; }
     public decimal Amount { get; set; }
     public decimal Net { get; set; }
+    public bool IsSettleUp { get; set; }
     public ICollection<string> PaidByMembers { get; set; } = [];
 }

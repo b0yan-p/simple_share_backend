@@ -214,6 +214,9 @@ namespace simpleShare_backend.Migrations
                     b.Property<Guid>("GroupId")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<bool?>("IsSettleUp")
+                        .HasColumnType("bit");
+
                     b.Property<DateTime?>("ModifiedAt")
                         .HasColumnType("datetime2");
 
@@ -230,6 +233,8 @@ namespace simpleShare_backend.Migrations
 
                     b.HasIndex("GroupId")
                         .HasFilter("[DeletedAt] IS NULL");
+
+                    b.HasIndex("ModifiedByMemberId");
 
                     b.HasIndex("GroupId", "CreatedAt");
 
@@ -505,9 +510,15 @@ namespace simpleShare_backend.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.HasOne("simpleShare_backend.Models.Domain.Member", "ModifiedByMember")
+                        .WithMany()
+                        .HasForeignKey("ModifiedByMemberId");
+
                     b.Navigation("CreatedByMember");
 
                     b.Navigation("Group");
+
+                    b.Navigation("ModifiedByMember");
                 });
 
             modelBuilder.Entity("simpleShare_backend.Models.Domain.ExpensePayment", b =>

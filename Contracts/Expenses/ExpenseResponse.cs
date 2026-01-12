@@ -6,6 +6,7 @@ public class ExpenseResponse
     public string Description { get; set; } = string.Empty;
     public DateTime ExpenseDate { get; set; }
     public decimal Amount { get; set; }
+    public bool IsSettleUp { get; set; }
     public ExpenseLogResponse CreatedInfo { get; set; } = default!;
     public ExpenseLogResponse? ModifiedInfo { get; set; }
     public ICollection<ExpenseMemberAmountResponse> PaidBy { get; set; } = [];

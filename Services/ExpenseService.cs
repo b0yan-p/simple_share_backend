@@ -34,7 +34,8 @@ public class ExpenseService(
             TotalAmount = request.TotalAmount,
             ExpenseDate = request.ExpenseDate,
             CreatedAt = DateTime.UtcNow,
-            CreatedByMemberId = owner.MemberId
+            CreatedByMemberId = owner.MemberId,
+            IsSettleUp = request.IsSettleUp,
         };
 
         return await repo.CreateAsync<Expense, Guid>(expense);
@@ -156,6 +157,7 @@ public class ExpenseService(
             Amount = Math.Round(expense.TotalAmount, 2, MidpointRounding.AwayFromZero),
             Description = expense.Description,
             ExpenseDate = expense.ExpenseDate,
+            IsSettleUp = expense.IsSettleUp ?? false,
             CreatedInfo = new ExpenseLogResponse()
             {
                 MemberId = expense.CreatedByMemberId,
@@ -209,6 +211,7 @@ public class ExpenseService(
                 e.Description,
                 e.ExpenseDate,
                 e.TotalAmount,
+                e.IsSettleUp,
 
                 PaidByMembers = e.Payments.Select(p => p.PaidByMember.DisplayName),
                 PaidSum = e.Payments
@@ -226,6 +229,7 @@ public class ExpenseService(
             Id = e.Id,
             Description = e.Description,
             ExpenseDate = e.ExpenseDate,
+            IsSettleUp = e.IsSettleUp ?? false,
             Amount = Math.Round(e.TotalAmount, 2, MidpointRounding.AwayFromZero),
             PaidByMembers = [.. e.PaidByMembers],
             Net = Math.Round(e.PaidSum - e.SplitSum, 2, MidpointRounding.AwayFromZero)
@@ -285,6 +289,8 @@ public class ExpenseService(
 
     public async Task<ExpenseResponse> SaveExpenseAsync(Guid groupId, ExpenseRequest request, Guid userId)
     {
+        ValidateExpenseRequest(request);
+
         _ = await memberService.GetMemberByUserIdAsync(userId)
             ?? throw new Exception("Member does not exist!");
 
@@ -352,6 +358,57 @@ public class ExpenseService(
         expense.ModifiedAt = DateTime.UtcNow;
 
         await db.SaveChangesAsync();
+
+        return true;
+    }
+
+    public async Task<bool> SettleUpDebtAsync(Guid groupId, SettleUpRequest request, Guid userId)
+    {
+        Member fromMember;
+        Member toMember;
+        if (request.FromMemberId is null)
+        {
+            fromMember = await memberService.GetMemberByUserIdAsync(userId)
+                ?? throw new Exception("Member not found!");
+            request.FromMemberId = fromMember.Id;
+        }
+        else
+        {
+            fromMember = await memberService.GetMemberAsync(request.FromMemberId.Value)
+                ?? throw new Exception("Member not found!");
+        }
+
+        if (request.FromMemberId == request.ToMemberId)
+            throw new Exception("You cannot pay to yourself!");
+
+        var isGroupMemberA = await groupMemberService.IsGroupMemberAsync(groupId, request.FromMemberId.Value);
+        var isGroupMemberB = await groupMemberService.IsGroupMemberAsync(groupId, request.ToMemberId);
+
+        if (!isGroupMemberA || !isGroupMemberB)
+            throw new Exception("Group member is not in group");
+
+        toMember = await memberService.GetMemberAsync(request.ToMemberId)
+            ?? throw new Exception("Member not found!");
+
+        var amount = Math.Round(request.Amount, 2, MidpointRounding.AwayFromZero);
+
+        ExpenseRequest expRequest = new()
+        {
+            Description = $"{fromMember.DisplayName} paid to {toMember.DisplayName} {amount}",
+            ExpenseDate = request.Date,
+            TotalAmount = amount,
+            IsSettleUp = true,
+            Payments = [new ExpensePaymentRequest(){
+                MemberId = request.FromMemberId.Value,
+                Amount = amount
+            }],
+            Splits = [new SplitRequest(){
+                MemberId = request.ToMemberId,
+                Amount = amount
+            }]
+        };
+
+        await SaveExpenseAsync(groupId, expRequest, userId);
 
         return true;
     }

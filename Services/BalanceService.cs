@@ -223,7 +223,7 @@ public class BalanceService(
         Dictionary<Guid, string> names
     )
     {
-        const decimal noiseThreshold = 0.00005m;
+        const decimal settleThreshold = 0.01m;
         var debtsNet = new List<DebtEdge>(netByPair.Count);
 
         foreach (var kvp in netByPair)
@@ -232,29 +232,29 @@ public class BalanceService(
             var b = kvp.Key.B;
             var net = kvp.Value;
 
-            if (net > -noiseThreshold && net < noiseThreshold)
+            if (net > -settleThreshold && net < settleThreshold)
+                continue;
+
+            var roundedNet = Math.Round(net, 2, MidpointRounding.AwayFromZero);
+            if (roundedNet == 0)
                 continue;
 
             Guid debtorId;
             Guid creditorId;
             decimal amount;
 
-            if (net > 0)
+            if (roundedNet > 0)
             {
                 debtorId = a;
                 creditorId = b;
-                amount = net;
+                amount = roundedNet;
             }
             else
             {
                 debtorId = b;
                 creditorId = a;
-                amount = -net;
+                amount = -roundedNet;
             }
-
-            amount = Math.Round(amount, 2, MidpointRounding.AwayFromZero);
-            if (amount == 0)
-                continue;
 
             debtsNet.Add(new DebtEdge
             {

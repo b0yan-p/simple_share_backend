@@ -62,5 +62,20 @@ public class ExpenseController(IExpenseService service) : ControllerBase
         if (!deleted) return NotFound();
         return NoContent();
     }
+
+    [HttpPost]
+    [Route("{groupId}/settleUp")]
+    public async Task<IActionResult> SettleUpDebtAsync([FromRoute] Guid groupId, SettleUpRequest request)
+    {
+        if (!ModelState.IsValid)
+            throw new Exception("Invalid request!");
+
+        var result = await service.SettleUpDebtAsync(groupId, request, User.GetUserId());
+
+        if (!result)
+            return NotFound();
+
+        return NoContent();
+    }
 }
 

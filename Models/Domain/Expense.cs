@@ -17,6 +17,7 @@ public class Expense : BaseModel<Guid>, IDeletable, ICreatable, IModifiable
     public DateTime? ModifiedAt { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime? DeletedAt { get; set; }
+    public bool? IsSettleUp { get; set; }
     public Group Group { get; set; } = default!;
     public Member CreatedByMember { get; set; } = default!;
     public Member ModifiedByMember { get; set; } = default!;

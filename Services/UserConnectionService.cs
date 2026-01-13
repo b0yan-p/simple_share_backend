@@ -2,6 +2,7 @@ using simpleShare_backend.Data;
 using simpleShare_backend.Models.Domain;
 using System.Data.SqlTypes;
 using Microsoft.EntityFrameworkCore;
+using simpleShare_backend.Contracts.Member;
 
 namespace simpleShare_backend.Services;
 
@@ -58,5 +59,27 @@ public class UserConnectionService(ApplicationDbContext db) : IUserConnectionSer
         db.UserConnections.AddRange(toInsert);
 
         return true;
+    }
+
+    public async Task<List<MemberListResponse>> GetMyConnectionsAsync(Guid userId)
+    {
+        var myConnectionIds = db.UserConnections
+            .Where(x => x.UserAId == userId || x.UserBId == userId)
+            .Select(x => x.UserAId == userId ? x.UserBId : x.UserAId)
+            .Distinct();
+
+        var members = await db.Members.Join(
+            myConnectionIds,
+            x => x.UserId,
+            y => y,
+            (x, y) => new MemberListResponse()
+            {
+                Id = x.Id,
+                DisplayName = x.DisplayName,
+            }
+        )
+        .ToListAsync();
+
+        return members;
     }
 }

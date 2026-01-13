@@ -1,8 +1,11 @@
+using Microsoft.Data.SqlClient;
+using Microsoft.EntityFrameworkCore;
 using simpleShare_backend.Common.Extensions;
 using simpleShare_backend.Contracts.Member;
 using simpleShare_backend.Data;
 using simpleShare_backend.Infrastructure;
 using simpleShare_backend.Models.Domain;
+using simpleShare_backend.Models.Enums;
 
 namespace simpleShare_backend.Services;
 
@@ -10,6 +13,7 @@ public class GroupMemberManagementService(
     IGroupService groupService,
     IMemberService memberService,
     IGroupMemberService groupMemberService,
+    IUserConnectionService userConnectionService,
     IRepositoryAsync repo,
     ApplicationDbContext dbContext
 ) : IGroupMemberManagementService
@@ -68,6 +72,35 @@ public class GroupMemberManagementService(
                 dbContext.ChangeTracker.Clear();
                 response.ErrorMessages.Add(e.Message);
             }
+        }
+
+        var userIds = await dbContext.GroupMembers
+            .AsNoTracking()
+            .Where(x =>
+                x.GroupId == groupId &&
+                x.LeftAt == null &&
+                x.GroupMemberStatus != GroupMemberStatus.Deleted &&
+                x.Member.UserId != null
+            )
+            .Select(x => x.Member.UserId!.Value)
+            .Distinct()
+            .ToListAsync();
+
+        try
+        {
+            var anyAdded = await userConnectionService.AddUserConnectionBulk(userIds);
+            if (anyAdded)
+            {
+                await repo.SaveChangesAsync();
+            }
+        }
+        catch (DbUpdateException ex)
+        when (
+            ex.InnerException is SqlException sqlEx &&
+            (sqlEx.Number == 2627 || sqlEx.Number == 2601)
+        )
+        {
+            dbContext.ChangeTracker.Clear();
         }
 
         return response;

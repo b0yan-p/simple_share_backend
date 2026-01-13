@@ -17,6 +17,7 @@ public class ApplicationDbContext(DbContextOptions dbContextOptions)
     public DbSet<Expense> Expenses { get; set; }
     public DbSet<ExpensePayment> ExpensePayments { get; set; }
     public DbSet<ExpenseSplit> ExpenseSplits { get; set; }
+    public DbSet<UserConnection> UserConnections { get; set; }
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -153,6 +154,31 @@ public class ApplicationDbContext(DbContextOptions dbContextOptions)
 
         #endregion
 
+        #region UserConnections
+
+        builder.Entity<UserConnection>()
+            .HasKey(x => new { x.UserAId, x.UserBId });
+
+        builder.Entity<UserConnection>()
+            .HasOne(e => e.UserA)
+            .WithMany(u => u.ConnectionAsA)
+            .HasForeignKey(x => x.UserAId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        builder.Entity<UserConnection>()
+            .HasOne(x => x.UserB)
+            .WithMany(u => u.ConnectionsAsB)
+            .HasForeignKey(x => x.UserBId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        builder.Entity<UserConnection>()
+            .ToTable(t =>
+            {
+                t.HasCheckConstraint("CK_UserConnection_NotSelf", "[UserAId] <> [UserBId]");
+                t.HasCheckConstraint("CK_UserConnection_Ordered", "[UserAId] < [UserBId]");
+            });
+
+        #endregion
         // Seed Roles
         List<IdentityRole<Guid>> roles =
         [

@@ -371,6 +371,29 @@ namespace simpleShare_backend.Migrations
                     b.ToTable("Members");
                 });
 
+            modelBuilder.Entity("simpleShare_backend.Models.Domain.UserConnection", b =>
+                {
+                    b.Property<Guid>("UserAId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("UserBId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("UserAId", "UserBId");
+
+                    b.HasIndex("UserBId");
+
+                    b.ToTable("UserConnections", t =>
+                        {
+                            t.HasCheckConstraint("CK_UserConnection_NotSelf", "[UserAId] <> [UserBId]");
+
+                            t.HasCheckConstraint("CK_UserConnection_Ordered", "[UserAId] < [UserBId]");
+                        });
+                });
+
             modelBuilder.Entity("simpleShare_backend.Models.Identity.User", b =>
                 {
                     b.Property<Guid>("Id")
@@ -587,6 +610,25 @@ namespace simpleShare_backend.Migrations
                     b.Navigation("User");
                 });
 
+            modelBuilder.Entity("simpleShare_backend.Models.Domain.UserConnection", b =>
+                {
+                    b.HasOne("simpleShare_backend.Models.Identity.User", "UserA")
+                        .WithMany("ConnectionAsA")
+                        .HasForeignKey("UserAId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("simpleShare_backend.Models.Identity.User", "UserB")
+                        .WithMany("ConnectionsAsB")
+                        .HasForeignKey("UserBId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("UserA");
+
+                    b.Navigation("UserB");
+                });
+
             modelBuilder.Entity("simpleShare_backend.Domain.Group", b =>
                 {
                     b.Navigation("Expenses");
@@ -614,6 +656,10 @@ namespace simpleShare_backend.Migrations
 
             modelBuilder.Entity("simpleShare_backend.Models.Identity.User", b =>
                 {
+                    b.Navigation("ConnectionAsA");
+
+                    b.Navigation("ConnectionsAsB");
+
                     b.Navigation("Member");
                 });
 #pragma warning restore 612, 618

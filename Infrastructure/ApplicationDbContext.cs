@@ -18,6 +18,7 @@ public class ApplicationDbContext(DbContextOptions dbContextOptions)
     public DbSet<ExpensePayment> ExpensePayments { get; set; }
     public DbSet<ExpenseSplit> ExpenseSplits { get; set; }
     public DbSet<UserConnection> UserConnections { get; set; }
+    public DbSet<Activity> Activities { get; set; }
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -35,6 +36,7 @@ public class ApplicationDbContext(DbContextOptions dbContextOptions)
 
 
         #region Index
+
         builder.Entity<Member>()
             .HasIndex(m => m.UserId)
             .IsUnique()
@@ -64,10 +66,6 @@ public class ApplicationDbContext(DbContextOptions dbContextOptions)
 
         builder.Entity<ExpenseSplit>()
             .HasIndex(e => e.OwedByMemberId);
-
-        builder.Entity<ExpenseSplit>()
-        .HasIndex(e => new { e.OwedByMemberId, e.ExpenseId });
-
         #endregion
 
         #region GroupMembers
@@ -179,6 +177,34 @@ public class ApplicationDbContext(DbContextOptions dbContextOptions)
             });
 
         #endregion
+
+        #region Activity
+
+        builder.Entity<Activity>(b =>
+        {
+            b.HasKey(x => x.Id);
+
+            b.Property(x => x.DataJson)
+                .IsRequired()
+                .HasColumnType("nvarchar(max)");
+
+            b.HasOne(x => x.Group)
+                .WithMany(g => g.Activities)
+                .HasForeignKey(x => x.GroupId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            b.HasOne(x => x.ActorMember)
+                .WithMany(m => m.ActivitiesAsActor)
+                .HasForeignKey(x => x.ActorMemberId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            b.HasIndex(x => new { x.GroupId, x.CreatedAt, x.Id });
+            b.HasIndex(x => new { x.EntityType, x.EntityId });
+            b.HasIndex(x => x.SourceEventId).IsUnique();
+        });
+
+        #endregion
+
         // Seed Roles
         List<IdentityRole<Guid>> roles =
         [

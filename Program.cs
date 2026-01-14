@@ -7,6 +7,7 @@ using simpleShare_backend.Infrastructure;
 using simpleShare_backend.Interfaces;
 using simpleShare_backend.Models.Identity;
 using simpleShare_backend.Services;
+using simpleShare_backend.Services.Interfaces;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -71,7 +72,7 @@ builder.Services.AddCors(options =>
     });
 });
 
-// #region Services scope
+#region Services scope
 
 builder.Services.AddScoped<ITokenService, TokenService>();
 builder.Services.AddScoped<IUserRepository, UserRepository>();
@@ -85,9 +86,9 @@ builder.Services.AddScoped<IUserConnectionService, UserConnectionService>();
 builder.Services.AddScoped<IGroupMemberManagementService, GroupMemberManagementService>();
 builder.Services.AddScoped<IExpenseService, ExpenseService>();
 builder.Services.AddScoped<IBalanceService, BalanceService>();
+builder.Services.AddScoped<IActivityService, ActivityService>();
 
-
-// #endregion
+#endregion
 
 var app = builder.Build();
 

@@ -27,4 +27,5 @@ public class Member : BaseModel<Guid>, IDeletable, ICreatable, IModifiable
     public ICollection<Expense> CreatedExpenses { get; } = [];
     public ICollection<ExpensePayment> ExpensePayments { get; } = [];
     public ICollection<ExpenseSplit> ExpenseSplits { get; } = [];
+    public ICollection<Activity> ActivitiesAsActor { get; } = [];
 }

@@ -319,21 +319,41 @@ public class ExpenseService(
         var expense = await CreateExpenseAsync(groupId, request, gm)
             ?? throw new Exception("Exception failed to create");
 
-        var activityEvent = new ActivityEvent<ExpenseActivityData>(
-            Type: ActivityType.ExpenseCreated,
-            EntityType: ActivityEntityType.Expense,
-            EntityId: expense.Id,
-            GroupId: groupId,
-            ActorMemberId: gm.MemberId,
-            Data: new ExpenseActivityData(
-                Description: expense.Description,
-                Amount: expense.TotalAmount
-            )
-        );
-        activityWriter.Enqueue(activityEvent);
 
         await CreateExpensePaymentsAsync(expense, activeMemberIds, request.Payments);
         await CreateExpenseSplitsAsync(expense, activeMemberIds, request.Splits);
+
+        if (request.IsSettleUp != null && request.IsSettleUp.Value)
+        {
+            var activity = new ActivityEvent<SettleUpActivityData>(
+                Type: ActivityType.SettleUpCreated,
+                EntityType: ActivityEntityType.SettleUp,
+                EntityId: expense.Id,
+                GroupId: groupId,
+                ActorMemberId: gm.MemberId,
+                Data: new SettleUpActivityData(
+                    FromMemberId: expense.Payments.FirstOrDefault()!.PaidByMemberId,
+                    ToMemberId: expense.Splits.FirstOrDefault()!.OwedByMemberId,
+                    Amount: expense.TotalAmount
+                )
+            );
+            activityWriter.Enqueue(activity);
+        }
+        else
+        {
+            var activityEvent = new ActivityEvent<ExpenseActivityData>(
+                Type: ActivityType.ExpenseCreated,
+                EntityType: ActivityEntityType.Expense,
+                EntityId: expense.Id,
+                GroupId: groupId,
+                ActorMemberId: gm.MemberId,
+                Data: new ExpenseActivityData(
+                    Description: expense.Description,
+                    Amount: expense.TotalAmount
+                )
+            );
+            activityWriter.Enqueue(activityEvent);
+        }
 
         await repo.SaveChangesAsync();
 
@@ -438,6 +458,12 @@ public class ExpenseService(
 
         if (request.TotalAmount <= 0)
             throw new Exception("Total amount must be greater than 0");
+
+        if (request.IsSettleUp != null && request.IsSettleUp.Value && request.Payments.Count > 1)
+            throw new Exception("Settle up can be done only by one payer at the time!");
+
+        if (request.IsSettleUp != null && request.IsSettleUp.Value && request.Splits.Count > 1)
+            throw new Exception("Settle up can be done only to one member at the time!");
     }
 
     private void ValidateUpdateExpenseRequest(UpdateExpenseRequest request)

@@ -4,25 +4,32 @@ using simpleShare_backend.Common.Extensions;
 using simpleShare_backend.Contracts.Member;
 using simpleShare_backend.Data;
 using simpleShare_backend.Infrastructure;
+using simpleShare_backend.Models.Application.Activity;
 using simpleShare_backend.Models.Domain;
 using simpleShare_backend.Models.Enums;
+using simpleShare_backend.Services.Interfaces;
 
 namespace simpleShare_backend.Services;
 
 public class GroupMemberManagementService(
-    IGroupService groupService,
+IGroupService groupService,
     IMemberService memberService,
     IGroupMemberService groupMemberService,
     IUserConnectionService userConnectionService,
     IRepositoryAsync repo,
-    ApplicationDbContext dbContext
+    ApplicationDbContext dbContext,
+    IActivityWriter activityWriter
 ) : IGroupMemberManagementService
 {
 
-    public async Task<AddGroupMembersResponse> AddGroupMembersAsync(Guid groupId, AddGroupMembersRequest input)
+    public async Task<AddGroupMembersResponse> AddGroupMembersAsync(Guid groupId, Guid userId, AddGroupMembersRequest input)
     {
+
         _ = await groupService.GetGroupAsync(groupId)
             ?? throw new Exception("GroupId does not exist");
+
+        var meMember = await memberService.GetMemberByUserIdAsync(userId)
+            ?? throw new Exception("Member not found!");
 
         AddGroupMembersResponse response = new();
 
@@ -61,6 +68,19 @@ public class GroupMemberManagementService(
                 }
                 else
                 {
+                    ActivityEvent<MemberActivityData> activity = new(
+                        Type: ActivityType.MemberAddedToGroup,
+                        EntityType: ActivityEntityType.Member,
+                        EntityId: gm.MemberId,
+                        GroupId: groupId,
+                        ActorMemberId: meMember.Id,
+                        Data: new MemberActivityData(
+                            TargetMemberId: gm.MemberId,
+                            TargetMemberName: gm.Member.DisplayName
+                        )
+                    );
+                    activityWriter.Enqueue(activity);
+
                     await repo.SaveChangesAsync();
                     await tx.CommitAsync();
                     response.Members.Add(gm.ToResponse());

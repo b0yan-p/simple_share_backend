@@ -1,5 +1,6 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Mvc;
+using simpleShare_backend.Common.Extensions;
 using simpleShare_backend.Contracts.Member;
 using simpleShare_backend.Services;
 
@@ -16,7 +17,7 @@ public class GroupMemberController(
     [Route("members/bulk")]
     public async Task<AddGroupMembersResponse> AddGroupMembersAsync(Guid groupId, [FromBody] AddGroupMembersRequest input)
     {
-        var result = await service.AddGroupMembersAsync(groupId, input);
+        var result = await service.AddGroupMembersAsync(groupId, User.GetUserId(), input);
         return result;
     }
 

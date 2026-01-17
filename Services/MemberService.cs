@@ -45,6 +45,7 @@ public class MemberService(IRepositoryAsync repo) : IMemberService
 
         Member member = new()
         {
+            Id = Guid.NewGuid(),
             DisplayName = input.DisplayName.Trim(),
             Email = input.Email?.Trim(),
             NormalizedEmail = input.Email?.Trim().ToUpper(),

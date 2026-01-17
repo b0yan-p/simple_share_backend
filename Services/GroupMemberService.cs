@@ -1,8 +1,10 @@
 using simpleShare_backend.Common.Extensions;
 using simpleShare_backend.Contracts.Member;
 using simpleShare_backend.Infrastructure;
+using simpleShare_backend.Models.Application.Activity;
 using simpleShare_backend.Models.Domain;
 using simpleShare_backend.Models.Enums;
+using simpleShare_backend.Services.Interfaces;
 
 namespace simpleShare_backend.Services;
 
@@ -10,7 +12,8 @@ public class GroupMemberService(
     IMemberService memberService,
     IGroupService groupService,
     IGroupMemberRepository groupMemberRepo,
-    IBalanceService balanceService
+    IBalanceService balanceService,
+    IActivityWriter activityWriter
 ) : IGroupMemberService
 {
     public async Task<GroupMember?> AddExistingMemberIntoGroupAsync(Guid memberId, Guid groupId)
@@ -120,6 +123,20 @@ public class GroupMemberService(
 
         gm.LeftAt = DateTime.UtcNow;
         gm.GroupMemberStatus = GroupMemberStatus.Deleted;
+
+        ActivityEvent<MemberActivityData> activity = new(
+            Type: ActivityType.MemberRemovedFromGroup,
+            EntityType: ActivityEntityType.Member,
+            EntityId: gm.MemberId,
+            GroupId: groupId,
+            ActorMemberId: memberOwner.Id,
+            Data: new MemberActivityData(
+                TargetMemberId: gm.MemberId,
+                TargetMemberName: gm.Member.DisplayName
+            )
+        );
+
+        activityWriter.Enqueue(activity);
 
         var result = groupMemberRepo.UpdateGroupMember(gm);
         await groupMemberRepo.SaveChangesAsync();

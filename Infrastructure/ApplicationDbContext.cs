@@ -19,6 +19,7 @@ public class ApplicationDbContext(DbContextOptions dbContextOptions)
     public DbSet<ExpenseSplit> ExpenseSplits { get; set; }
     public DbSet<UserConnection> UserConnections { get; set; }
     public DbSet<Activity> Activities { get; set; }
+    public DbSet<OutboxMessage> OutboxMessages { get; set; }
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -203,6 +204,21 @@ public class ApplicationDbContext(DbContextOptions dbContextOptions)
             b.HasIndex(x => x.SourceEventId).IsUnique();
         });
 
+        #endregion
+
+        #region OutboxMessage
+        builder.Entity<OutboxMessage>(b =>
+        {
+            b.HasKey(x => x.Id);
+
+            b.Property(x => x.Type).IsRequired();
+            b.Property(x => x.LastError).HasMaxLength(2000);
+            b.Property(x => x.PayloadJson)
+                .IsRequired()
+                .HasColumnType("nvarchar(max)");
+
+            b.HasIndex(x => new { x.ProcessedAt, x.CreatedAt, x.Id });
+        });
         #endregion
 
         // Seed Roles

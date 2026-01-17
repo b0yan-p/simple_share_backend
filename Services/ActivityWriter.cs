@@ -1,7 +1,9 @@
 using System.Text.Json;
+using Microsoft.AspNetCore.Http.HttpResults;
 using simpleShare_backend.Data;
 using simpleShare_backend.Models.Application.Activity;
 using simpleShare_backend.Models.Domain;
+using simpleShare_backend.Models.Enums;
 using simpleShare_backend.Services.Interfaces;
 
 namespace simpleShare_backend.Services;
@@ -14,11 +16,12 @@ public class ActivityWriter(ApplicationDbContext db) : IActivityWriter
     {
         var sourceEventId = evt.SourceEventId ?? Guid.NewGuid();
         var createdAt = evt.CreatedAt ?? DateTime.UtcNow;
+        var activityId = Guid.NewGuid();
 
         db.Activities.Add(
             new Activity
             {
-                Id = Guid.NewGuid(),
+                Id = activityId,
                 SourceEventId = sourceEventId,
                 CreatedAt = createdAt,
                 GroupId = evt.GroupId,
@@ -30,6 +33,23 @@ public class ActivityWriter(ApplicationDbContext db) : IActivityWriter
             }
         );
 
-        // TODO implement OutboxMessage later
+        var outboxPayload = new ActivityCreateOutboxPayload(
+            ActivityId: activityId,
+            GroupId: evt.GroupId,
+            ActorMemberId: evt.ActorMemberId,
+            Type: evt.Type,
+            EntityType: evt.EntityType,
+            EntityId: evt.EntityId,
+            CreatedAt: createdAt
+        );
+
+        db.OutboxMessages.Add(new OutboxMessage()
+        {
+            Id = Guid.NewGuid(),
+            CreatedAt = createdAt,
+            Type = evt.Type,
+            PayloadJson = JsonSerializer.Serialize(outboxPayload, JsonOptions),
+            AttemptCount = 0
+        });
     }
 }

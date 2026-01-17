@@ -1,3 +1,4 @@
+using System.Text.Json;
 using simpleShare_backend.Models.Enums;
 
 namespace simpleShare_backend.Contracts.Activity;
@@ -13,5 +14,5 @@ public class ActivityResponse
     public string ActorName { get; set; } = string.Empty;
     public ActivityEntityType EntityType { get; set; }
     public Guid EntityId { get; set; }
-    public string Data { get; set; } = string.Empty;
+    public JsonElement Data { get; set; }
 }

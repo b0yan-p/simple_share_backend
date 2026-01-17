@@ -1,4 +1,4 @@
-using System.Threading.Tasks.Dataflow;
+using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using simpleShare_backend.Common;
 using simpleShare_backend.Contracts.Activity;
@@ -86,25 +86,40 @@ public class ActivityService(
 
         var totalCount = await baseQuery.CountAsync(ct);
 
-        var activities = await baseQuery
+        var rows = await baseQuery
             .OrderByDescending(a => a.CreatedAt)
             .ThenByDescending(a => a.Id)
             .Skip(skip)
             .Take(take)
-            .Select(a => new ActivityResponse
+            .Select(a => new
             {
-                Id = a.Id,
-                CreatedAt = a.CreatedAt,
-                ActorMemberId = a.ActorMemberId,
+                a.Id,
+                a.CreatedAt,
+                a.ActorMemberId,
                 ActorName = a.ActorMember.DisplayName,
-                GroupId = a.GroupId,
+                a.GroupId,
                 GroupName = a.Group.Name,
-                Data = a.DataJson,
-                EntityId = a.EntityId,
-                EntityType = a.EntityType,
-                Type = a.Type
+                a.DataJson,
+                a.EntityId,
+                a.EntityType,
+                a.Type
             })
             .ToListAsync(ct);
+
+        var activities = rows.Select(a => new ActivityResponse
+        {
+            Id = a.Id,
+            CreatedAt = a.CreatedAt,
+            ActorMemberId = a.ActorMemberId,
+            GroupId = a.GroupId,
+            ActorName = a.ActorName,
+
+            GroupName = a.GroupName,
+            Data = JsonSerializer.Deserialize<JsonElement>(a.DataJson),
+            EntityId = a.EntityId,
+            EntityType = a.EntityType,
+            Type = a.Type
+        }).ToList();
 
         return new PageResponse<ActivityResponse>(activities, totalCount, skip, take);
     }

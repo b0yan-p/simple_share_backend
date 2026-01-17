@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using simpleShare_backend.Models.Application.Activity;
 
 namespace simpleShare_backend.Services.Interfaces;

@@ -6,19 +6,19 @@ namespace simpleShare_backend.Services;
 
 public interface IExpenseService
 {
-    Task<ExpenseResponse> SaveExpenseAsync(Guid groupId, ExpenseRequest request, Guid userId);
+    Task<ExpenseResponse> SaveExpenseAsync(Guid groupId, CreateExpenseRequest request, Guid userId);
     Task<ICollection<ExpensePayment>> CreateExpensePaymentsAsync(
         Expense expense,
         IReadOnlySet<Guid> activeMemberIds,
-        ExpenseRequest request
+        ICollection<ExpensePaymentRequest> payments
     );
     Task<ICollection<ExpenseSplit>> CreateExpenseSplitsAsync(
         Expense expense,
         IReadOnlySet<Guid> activeMemberIds,
-        ExpenseRequest request
+        ICollection<SplitRequest> splits
     );
-    Task<Expense> CreateExpenseAsync(Guid groupId, ExpenseRequest request, GroupMember owner);
-    Task<ExpenseResponse> UpdateExpenseAsync(Guid groupId, ExpenseRequest request, Guid userId);
+    Task<Expense> CreateExpenseAsync(Guid groupId, CreateExpenseRequest request, GroupMember owner);
+    Task<ExpenseResponse> UpdateExpenseAsync(Guid groupId, UpdateExpenseRequest request, Guid userId);
     Task<PageResponse<ExpenseListResponse>> GetGroupExpenseListAsync(
         Guid groupId,
         Guid userId,

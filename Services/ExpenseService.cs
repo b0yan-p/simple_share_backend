@@ -3,8 +3,10 @@ using simpleShare_backend.Common;
 using simpleShare_backend.Contracts.Expenses;
 using simpleShare_backend.Data;
 using simpleShare_backend.Infrastructure;
+using simpleShare_backend.Models.Application.Activity;
 using simpleShare_backend.Models.Domain;
 using simpleShare_backend.Models.Enums;
+using simpleShare_backend.Services.Interfaces;
 
 namespace simpleShare_backend.Services;
 
@@ -13,12 +15,14 @@ public class ExpenseService(
     IRepositoryAsync repo,
     IGroupService groupService,
     IMemberService memberService,
-    IGroupMemberService groupMemberService
+    IGroupMemberService groupMemberService,
+    IActivityWriter activityWriter,
+    IActivityService activityService
 ) : IExpenseService
 {
-    public async Task<Expense> CreateExpenseAsync(Guid groupId, ExpenseRequest request, GroupMember owner)
+    public async Task<Expense> CreateExpenseAsync(Guid groupId, CreateExpenseRequest request, GroupMember owner)
     {
-        ValidateExpenseRequest(request);
+        ValidateCreateExpenseRequest(request);
 
         _ = await groupService.GetGroupAsync(groupId)
             ?? throw new Exception("Group does not exist");
@@ -44,11 +48,9 @@ public class ExpenseService(
     public async Task<ICollection<ExpensePayment>> CreateExpensePaymentsAsync(
         Expense expense,
         IReadOnlySet<Guid> activeMemberIds,
-        ExpenseRequest request
+        ICollection<ExpensePaymentRequest> payments
     )
     {
-        var payments = request.Payments;
-
         if (payments is null || payments.Count == 0)
             throw new Exception("Payments are required!");
 
@@ -89,11 +91,9 @@ public class ExpenseService(
     public async Task<ICollection<ExpenseSplit>> CreateExpenseSplitsAsync(
         Expense expense,
         IReadOnlySet<Guid> activeMemberIds,
-        ExpenseRequest request
+        ICollection<SplitRequest> splits
     )
     {
-        var splits = request.Splits;
-
         if (splits is null || splits.Count == 0)
             throw new Exception("Splits are required!");
 
@@ -241,9 +241,9 @@ public class ExpenseService(
         return new PageResponse<ExpenseListResponse>(result, count, skip, take);
     }
 
-    public async Task<ExpenseResponse> UpdateExpenseAsync(Guid groupId, ExpenseRequest request, Guid userId)
+    public async Task<ExpenseResponse> UpdateExpenseAsync(Guid groupId, UpdateExpenseRequest request, Guid userId)
     {
-        ValidateExpenseRequest(request);
+        ValidateUpdateExpenseRequest(request);
 
         var meMember = await memberService.GetMemberByUserIdAsync(userId)
             ?? throw new Exception("Member not found in group");
@@ -259,14 +259,13 @@ public class ExpenseService(
 
         await using var tx = await db.Database.BeginTransactionAsync();
 
-        dbExpense.ModifiedAt = DateTime.UtcNow;
-        dbExpense.Description = request.Description;
-        dbExpense.ExpenseDate = request.ExpenseDate;
-        dbExpense.ModifiedByMemberId = meMember.Id;
-        dbExpense.TotalAmount = request.TotalAmount;
+        var oldExpense = (Expense)db.Entry(dbExpense).OriginalValues.Clone().ToObject();
 
-        await DeleteExpensePayments(dbExpense.Id);
-        await DeleteExpenseSplits(dbExpense.Id);
+        dbExpense.ModifiedAt = DateTime.UtcNow;
+        dbExpense.Description = request.Description ?? dbExpense.Description;
+        dbExpense.ExpenseDate = request.ExpenseDate ?? dbExpense.ExpenseDate;
+        dbExpense.ModifiedByMemberId = meMember.Id;
+        dbExpense.TotalAmount = request.TotalAmount ?? dbExpense.TotalAmount;
 
         var groupMembers = await groupMemberService.GetAllGroupMembersDefaultAsync(groupId);
         var activeMemberIds = groupMembers
@@ -277,8 +276,20 @@ public class ExpenseService(
                     .Select(x => x.MemberId)
                     .ToHashSet();
 
-        await CreateExpensePaymentsAsync(dbExpense, activeMemberIds, request);
-        await CreateExpenseSplitsAsync(dbExpense, activeMemberIds, request);
+        if (request.Payments != null)
+        {
+            await DeleteExpensePaymentsAsync(dbExpense.Id);
+            await CreateExpensePaymentsAsync(dbExpense, activeMemberIds, request.Payments);
+        }
+
+        if (request.Splits != null)
+        {
+            await DeleteExpenseSplitsAsync(dbExpense.Id);
+            await CreateExpenseSplitsAsync(dbExpense, activeMemberIds, request.Splits);
+        }
+
+        var activity = activityService.AddExpenseUpdatedActivity(oldExpense, dbExpense, meMember.Id);
+        activityWriter.Enqueue(activity);
 
         await repo.SaveChangesAsync();
         var result = await GetExpenseAsync(groupId, dbExpense.Id, userId);
@@ -287,9 +298,9 @@ public class ExpenseService(
         return result;
     }
 
-    public async Task<ExpenseResponse> SaveExpenseAsync(Guid groupId, ExpenseRequest request, Guid userId)
+    public async Task<ExpenseResponse> SaveExpenseAsync(Guid groupId, CreateExpenseRequest request, Guid userId)
     {
-        ValidateExpenseRequest(request);
+        ValidateCreateExpenseRequest(request);
 
         _ = await memberService.GetMemberByUserIdAsync(userId)
             ?? throw new Exception("Member does not exist!");
@@ -308,38 +319,25 @@ public class ExpenseService(
         var expense = await CreateExpenseAsync(groupId, request, gm)
             ?? throw new Exception("Exception failed to create");
 
-        await CreateExpensePaymentsAsync(expense, activeMemberIds, request);
-        await CreateExpenseSplitsAsync(expense, activeMemberIds, request);
+        var activityEvent = new ActivityEvent<ExpenseActivityData>(
+            Type: ActivityType.ExpenseCreated,
+            EntityType: ActivityEntityType.Expense,
+            EntityId: expense.Id,
+            GroupId: groupId,
+            ActorMemberId: gm.MemberId,
+            Data: new ExpenseActivityData(
+                Description: expense.Description,
+                Amount: expense.TotalAmount
+            )
+        );
+        activityWriter.Enqueue(activityEvent);
+
+        await CreateExpensePaymentsAsync(expense, activeMemberIds, request.Payments);
+        await CreateExpenseSplitsAsync(expense, activeMemberIds, request.Splits);
 
         await repo.SaveChangesAsync();
 
         return await GetExpenseAsync(groupId, expense.Id, userId);
-    }
-
-    private void ValidateExpenseRequest(ExpenseRequest request)
-    {
-        if (string.IsNullOrEmpty(request.Description))
-            throw new Exception("Description is required");
-
-        if (request.ExpenseDate == default)
-            throw new Exception("Expense date is required");
-
-        if (request.TotalAmount <= 0)
-            throw new Exception("Total amount must be greater than 0");
-    }
-
-    private async Task DeleteExpensePayments(Guid expenseId)
-    {
-        await db.ExpensePayments
-            .Where(ep => ep.ExpenseId == expenseId)
-            .ExecuteDeleteAsync();
-    }
-
-    private async Task DeleteExpenseSplits(Guid expenseId)
-    {
-        await db.ExpenseSplits
-            .Where(es => es.ExpenseId == expenseId)
-            .ExecuteDeleteAsync(); ;
     }
 
     public async Task<bool> DeleteExpenseAsync(Guid groupId, Guid expenseId, Guid userId)
@@ -349,6 +347,9 @@ public class ExpenseService(
         if (!isMember)
             throw new Exception("You are not group member!");
 
+        var member = await memberService.GetMemberByUserIdAsync(userId)
+            ?? throw new Exception("Member not found!");
+
         var expense = await db.Expenses
             .Where(e => e.GroupId == groupId && e.Id == expenseId && e.DeletedAt == null)
             .FirstOrDefaultAsync()
@@ -356,6 +357,20 @@ public class ExpenseService(
 
         expense.DeletedAt = DateTime.UtcNow;
         expense.ModifiedAt = DateTime.UtcNow;
+
+        var activityEvent = new ActivityEvent<ExpenseActivityData>(
+            Type: ActivityType.ExpenseDeleted,
+            EntityType: ActivityEntityType.Expense,
+            EntityId: expense.Id,
+            GroupId: groupId,
+            ActorMemberId: member.Id,
+            Data: new ExpenseActivityData(
+                Description: expense.Description,
+                Amount: expense.TotalAmount
+            )
+        );
+
+        activityWriter.Enqueue(activityEvent);
 
         await db.SaveChangesAsync();
 
@@ -392,7 +407,7 @@ public class ExpenseService(
 
         var amount = Math.Round(request.Amount, 2, MidpointRounding.AwayFromZero);
 
-        ExpenseRequest expRequest = new()
+        CreateExpenseRequest expRequest = new()
         {
             Description = $"{fromMember.DisplayName} paid to {toMember.DisplayName} {amount}",
             ExpenseDate = request.Date,
@@ -411,5 +426,43 @@ public class ExpenseService(
         await SaveExpenseAsync(groupId, expRequest, userId);
 
         return true;
+    }
+
+    private void ValidateCreateExpenseRequest(CreateExpenseRequest request)
+    {
+        if (string.IsNullOrEmpty(request.Description))
+            throw new Exception("Description is required");
+
+        if (request.ExpenseDate == default)
+            throw new Exception("Expense date is required");
+
+        if (request.TotalAmount <= 0)
+            throw new Exception("Total amount must be greater than 0");
+    }
+
+    private void ValidateUpdateExpenseRequest(UpdateExpenseRequest request)
+    {
+        if (request.ExpenseDate != null && request.ExpenseDate == default)
+            throw new Exception("Expense date is required");
+
+        if (request.TotalAmount != null && request.TotalAmount <= 0)
+            throw new Exception("Total amount must be greater than 0");
+
+        if (request.TotalAmount > 0 && (request.Payments == null || request.Payments.Count == 0 || request.Splits == null))
+            throw new Exception("Please enter payments and split shares!");
+    }
+
+    private async Task DeleteExpensePaymentsAsync(Guid expenseId)
+    {
+        await db.ExpensePayments
+            .Where(ep => ep.ExpenseId == expenseId)
+            .ExecuteDeleteAsync();
+    }
+
+    private async Task DeleteExpenseSplitsAsync(Guid expenseId)
+    {
+        await db.ExpenseSplits
+            .Where(es => es.ExpenseId == expenseId)
+            .ExecuteDeleteAsync(); ;
     }
 }

@@ -3,6 +3,8 @@ using Microsoft.EntityFrameworkCore;
 using simpleShare_backend.Common;
 using simpleShare_backend.Contracts.Activity;
 using simpleShare_backend.Data;
+using simpleShare_backend.Models.Application.Activity;
+using simpleShare_backend.Models.Domain;
 using simpleShare_backend.Models.Enums;
 using simpleShare_backend.Services.Interfaces;
 
@@ -13,12 +15,53 @@ public class ActivityService(
     IMemberService memberService
 ) : IActivityService
 {
-    public async Task<PageResponse<ActivityResponse>> GetMyActivitiesAsync(
-        Guid userId,
-        int skip,
-        int take,
-        CancellationToken ct = default
+    public ActivityEvent<ExpenseUpdatedActivityData> AddExpenseUpdatedActivity(
+        Expense oldExpense,
+        Expense newExpense,
+        Guid ActorMemberId
     )
+    {
+        var descBefore = oldExpense.Description;
+        var descAfter = newExpense.Description;
+
+        var amountBefore = oldExpense.TotalAmount;
+        var amountAfter = newExpense.TotalAmount;
+
+        var changedFields = new List<string>(2);
+
+        if (amountBefore != amountAfter)
+            changedFields.Add("amount");
+
+        if (string.CompareOrdinal(descBefore, descAfter) != 0)
+            changedFields.Add("description");
+
+
+        var data = new ExpenseUpdatedActivityData(
+            DescriptionBefore: descBefore,
+            DescriptionAfter: descAfter,
+            AmountAfter: amountAfter,
+            AmountBefore: amountBefore,
+            ChangedFields: [.. changedFields]
+        );
+
+        return new ActivityEvent<ExpenseUpdatedActivityData>
+        (
+            ActorMemberId: ActorMemberId,
+            CreatedAt: DateTime.UtcNow,
+            Data: data,
+            EntityId: newExpense.Id,
+            EntityType: ActivityEntityType.Expense,
+            Type: ActivityType.ExpenseUpdated,
+            GroupId: newExpense.GroupId
+        );
+    }
+
+    public async Task<PageResponse<ActivityResponse>> GetMyActivitiesAsync(
+         Guid userId,
+         int skip,
+         int take,
+         CancellationToken ct = default
+     )
     {
         var member = await memberService.GetMemberByUserIdAsync(userId)
             ?? throw new Exception("Member not found!");
@@ -32,7 +75,7 @@ public class ActivityService(
                 x.Group.DeletedAt == null
             )
             .Select(x => x.GroupId)
-            .ToListAsync();
+            .ToListAsync(ct);
 
         if (groupIds.Count == 0)
             return new PageResponse<ActivityResponse>([], 0, skip, take);

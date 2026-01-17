@@ -8,5 +8,7 @@ public sealed record ActivityEvent<T>(
     Guid EntityId,
     Guid GroupId,
     Guid ActorMemberId,
-    T Data
+    T Data,
+    DateTime? CreatedAt = null,
+    Guid? SourceEventId = null
 );

@@ -87,6 +87,7 @@ builder.Services.AddScoped<IGroupMemberManagementService, GroupMemberManagementS
 builder.Services.AddScoped<IExpenseService, ExpenseService>();
 builder.Services.AddScoped<IBalanceService, BalanceService>();
 builder.Services.AddScoped<IActivityService, ActivityService>();
+builder.Services.AddScoped<IActivityWriter, ActivityWriter>();
 
 #endregion
 

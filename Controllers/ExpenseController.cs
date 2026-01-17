@@ -16,7 +16,7 @@ public class ExpenseController(IExpenseService service) : ControllerBase
     [Route("{groupId}")]
     public async Task<ExpenseResponse> AddExpenseAsync(
         [FromRoute] Guid groupId,
-        [FromBody] ExpenseRequest request
+        [FromBody] CreateExpenseRequest request
     )
     {
         if (!ModelState.IsValid)
@@ -46,7 +46,10 @@ public class ExpenseController(IExpenseService service) : ControllerBase
 
     [HttpPut]
     [Route("{groupId}")]
-    public async Task<ExpenseResponse> UpdateExpenseAsync([FromRoute] Guid groupId, ExpenseRequest request)
+    public async Task<ExpenseResponse> UpdateExpenseAsync(
+        [FromRoute] Guid groupId,
+        UpdateExpenseRequest request
+    )
     {
         if (!ModelState.IsValid)
             throw new Exception("Invalid input");

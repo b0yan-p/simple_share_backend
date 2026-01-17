@@ -1,4 +1,3 @@
-using Microsoft.EntityFrameworkCore.Metadata.Internal;
 using simpleShare_backend.Models.Enums;
 
 namespace simpleShare_backend.Contracts.Activity;

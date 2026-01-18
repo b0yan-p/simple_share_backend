@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using simpleShare_backend.Common;
+using simpleShare_backend.Common.Exceptions;
 using simpleShare_backend.Contracts.Expenses;
 using simpleShare_backend.Data;
 using simpleShare_backend.Infrastructure;
@@ -25,10 +26,10 @@ public class ExpenseService(
         ValidateCreateExpenseRequest(request);
 
         _ = await groupService.GetGroupAsync(groupId)
-            ?? throw new Exception("Group does not exist");
+            ?? throw new NotFoundAppException("group_not_found", "Group does not exist");
 
         if (owner.LeftAt is not null || owner.GroupMemberStatus == GroupMemberStatus.Deleted)
-            throw new Exception("Member is not in the group!");
+            throw new ForbiddenAppException("member_not_in_group", "Member is not in the group!");
 
         Expense expense = new()
         {
@@ -52,24 +53,24 @@ public class ExpenseService(
     )
     {
         if (payments is null || payments.Count == 0)
-            throw new Exception("Payments are required!");
+            throw new ValidationAppException("payments_required", "Payments are required!");
 
         if (payments.Any(p => p.Amount <= 0))
-            throw new Exception("Payment amount must be greater than 0");
+            throw new ValidationAppException("payment_amount_invalid", "Payment amount must be greater than 0");
 
         var paymentMemberIds = payments
             .Select(x => x.MemberId)
             .ToList();
 
         if (paymentMemberIds.Distinct().Count() != payments.Count)
-            throw new Exception("Payment list must be unique");
+            throw new ValidationAppException("payments_not_unique", "Payment list must be unique");
 
         if (paymentMemberIds.Any(id => !activeMemberIds.Contains(id)))
-            throw new Exception("Payment list contains deleted group members");
+            throw new ValidationAppException("payments_invalid_members", "Payment list contains deleted group members");
 
         decimal sum = payments.Sum(x => x.Amount);
         if (Math.Abs(sum - expense.TotalAmount) > 0.0001m)
-            throw new Exception("Payment amounts are not splitted correctly!");
+            throw new ValidationAppException("invalid_request_data", "Payment amounts are not splitted correctly!");
 
         List<ExpensePayment> paymentToCreate = [];
 
@@ -95,24 +96,24 @@ public class ExpenseService(
     )
     {
         if (splits is null || splits.Count == 0)
-            throw new Exception("Splits are required!");
+            throw new ValidationAppException("splits_required", "Splits are required!");
 
         if (splits.Any(p => p.Amount <= 0))
-            throw new Exception("Split amount must be greater than 0");
+            throw new ValidationAppException("split_amount_invalid", "Split amount must be greater than 0");
 
         var splitsMemberIds = splits
             .Select(x => x.MemberId)
             .ToList();
 
         if (splitsMemberIds.Distinct().Count() != splits.Count)
-            throw new Exception("Splits list mys be unique");
+            throw new ValidationAppException("splits_not_unique", "Splits list mys be unique");
 
         if (splitsMemberIds.Any(id => !activeMemberIds.Contains(id)))
-            throw new Exception("Split list contains deleted group members");
+            throw new ValidationAppException("splits_invalid_members", "Split list contains deleted group members");
 
         decimal sum = splits.Sum(x => x.Amount);
         if (Math.Abs(sum - expense.TotalAmount) > 0.0001m)
-            throw new Exception("Split amounts are not splitted correctly!");
+            throw new ValidationAppException("splits_sum_invalid", "Split amounts are not splitted correctly!");
 
         List<ExpenseSplit> splitsToCreate = [];
 
@@ -136,7 +137,7 @@ public class ExpenseService(
         var isMember = await groupMemberService.IsUserGroupMember(groupId, userId);
 
         if (!isMember)
-            throw new Exception("Unauthorized access!");
+            throw new ForbiddenAppException("forbidden", "Unauthorized access!");
 
         var expense = await db.Expenses
             .Where(e => e.Id == expenseId && e.GroupId == groupId && e.DeletedAt == null)
@@ -149,7 +150,7 @@ public class ExpenseService(
             .FirstOrDefaultAsync();
 
         if (expense == null)
-            throw new Exception("Expense not found!");
+            throw new NotFoundAppException("expense_not_found", "Expense not found!");
 
         return new ExpenseResponse()
         {
@@ -193,10 +194,10 @@ public class ExpenseService(
      )
     {
         var meMember = await memberService.GetMemberByUserIdAsync(userId)
-            ?? throw new Exception("Member not found!");
+            ?? throw new NotFoundAppException("member_not_found", "Member not found!");
 
         _ = await groupMemberService.GetGroupMemberAsync(groupId, meMember.Id)
-            ?? throw new Exception("Not a group member!");
+            ?? throw new ForbiddenAppException("not_group_member", "Not a group member!");
 
         var expenses = await db.Expenses
             .AsNoTracking()
@@ -246,16 +247,16 @@ public class ExpenseService(
         ValidateUpdateExpenseRequest(request);
 
         var meMember = await memberService.GetMemberByUserIdAsync(userId)
-            ?? throw new Exception("Member not found in group");
+            ?? throw new NotFoundAppException("member_not_found", "Member not found in group");
 
         var isMember = await groupMemberService.IsUserGroupMember(groupId, userId);
         if (!isMember)
-            throw new Exception("Unauthorized access!");
+            throw new ForbiddenAppException("forbidden", "Unauthorized access!");
 
         var dbExpense = await db.Expenses
             .Where(x => x.Id == request.Id && x.GroupId == groupId && x.DeletedAt == null)
             .FirstOrDefaultAsync()
-            ?? throw new Exception("Expense not found!");
+            ?? throw new NotFoundAppException("expense_not_found", "Expense not found!");
 
         await using var tx = await db.Database.BeginTransactionAsync();
 
@@ -303,7 +304,7 @@ public class ExpenseService(
         ValidateCreateExpenseRequest(request);
 
         _ = await memberService.GetMemberByUserIdAsync(userId)
-            ?? throw new Exception("Member does not exist!");
+            ?? throw new NotFoundAppException("member_not_found", "Member does not exist!");
 
         var groupMembers = await groupMemberService.GetAllGroupMembersDefaultAsync(groupId);
         var activeMembers = groupMembers
@@ -314,10 +315,10 @@ public class ExpenseService(
         var gm = activeMembers
             .Where(e => e.Member.UserId == userId)
             .FirstOrDefault()
-                ?? throw new Exception("Member is not in the group!");
+                ?? throw new ForbiddenAppException("member_not_in_group", "Member is not in the group!");
 
         var expense = await CreateExpenseAsync(groupId, request, gm)
-            ?? throw new Exception("Exception failed to create");
+            ?? throw new ConflictAppException("expense_create_failed", "Failed to create expense");
 
 
         await CreateExpensePaymentsAsync(expense, activeMemberIds, request.Payments);
@@ -365,15 +366,15 @@ public class ExpenseService(
         var isMember = await groupMemberService.IsUserGroupMember(groupId, userId);
 
         if (!isMember)
-            throw new Exception("You are not group member!");
+            throw new ForbiddenAppException("not_group_member", "You are not group member!");
 
         var member = await memberService.GetMemberByUserIdAsync(userId)
-            ?? throw new Exception("Member not found!");
+            ?? throw new NotFoundAppException("member_not_found", "Member not found!");
 
         var expense = await db.Expenses
             .Where(e => e.GroupId == groupId && e.Id == expenseId && e.DeletedAt == null)
             .FirstOrDefaultAsync()
-            ?? throw new Exception("Expense not found!");
+            ?? throw new NotFoundAppException("expense_not_found", "Expense not found!");
 
         expense.DeletedAt = DateTime.UtcNow;
         expense.ModifiedAt = DateTime.UtcNow;
@@ -404,26 +405,26 @@ public class ExpenseService(
         if (request.FromMemberId is null)
         {
             fromMember = await memberService.GetMemberByUserIdAsync(userId)
-                ?? throw new Exception("Member not found!");
+                ?? throw new NotFoundAppException("member_not_found", "Member not found!");
             request.FromMemberId = fromMember.Id;
         }
         else
         {
             fromMember = await memberService.GetMemberAsync(request.FromMemberId.Value)
-                ?? throw new Exception("Member not found!");
+                ?? throw new NotFoundAppException("member_not_found", "Member not found!");
         }
 
         if (request.FromMemberId == request.ToMemberId)
-            throw new Exception("You cannot pay to yourself!");
+            throw new ValidationAppException("invalid_request", "You cannot pay to yourself!");
 
         var isGroupMemberA = await groupMemberService.IsGroupMemberAsync(groupId, request.FromMemberId.Value);
         var isGroupMemberB = await groupMemberService.IsGroupMemberAsync(groupId, request.ToMemberId);
 
         if (!isGroupMemberA || !isGroupMemberB)
-            throw new Exception("Group member is not in group");
+            throw new ForbiddenAppException("member_not_in_group", "Group member is not in group");
 
         toMember = await memberService.GetMemberAsync(request.ToMemberId)
-            ?? throw new Exception("Member not found!");
+            ?? throw new NotFoundAppException("member_not_found", "Member not found!");
 
         var amount = Math.Round(request.Amount, 2, MidpointRounding.AwayFromZero);
 
@@ -451,31 +452,31 @@ public class ExpenseService(
     private void ValidateCreateExpenseRequest(CreateExpenseRequest request)
     {
         if (string.IsNullOrEmpty(request.Description))
-            throw new Exception("Description is required");
+            throw new ValidationAppException("invalid_request", "Description is required");
 
         if (request.ExpenseDate == default)
-            throw new Exception("Expense date is required");
+            throw new ValidationAppException("invalid_request", "Expense date is required");
 
         if (request.TotalAmount <= 0)
-            throw new Exception("Total amount must be greater than 0");
+            throw new ValidationAppException("invalid_request", "Total amount must be greater than 0");
 
         if (request.IsSettleUp != null && request.IsSettleUp.Value && request.Payments.Count > 1)
-            throw new Exception("Settle up can be done only by one payer at the time!");
+            throw new ValidationAppException("invalid_request", "Settle up can be done only by one payer at the time!");
 
         if (request.IsSettleUp != null && request.IsSettleUp.Value && request.Splits.Count > 1)
-            throw new Exception("Settle up can be done only to one member at the time!");
+            throw new ValidationAppException("invalid_request", "Settle up can be done only to one member at the time!");
     }
 
     private void ValidateUpdateExpenseRequest(UpdateExpenseRequest request)
     {
         if (request.ExpenseDate != null && request.ExpenseDate == default)
-            throw new Exception("Expense date is required");
+            throw new ValidationAppException("invalid_request", "Expense date is required");
 
         if (request.TotalAmount != null && request.TotalAmount <= 0)
-            throw new Exception("Total amount must be greater than 0");
+            throw new ValidationAppException("invalid_request", "Total amount must be greater than 0");
 
         if (request.TotalAmount > 0 && (request.Payments == null || request.Payments.Count == 0 || request.Splits == null))
-            throw new Exception("Please enter payments and split shares!");
+            throw new ValidationAppException("invalid_request", "Please enter payments and split shares!");
     }
 
     private async Task DeleteExpensePaymentsAsync(Guid expenseId)

@@ -2,6 +2,7 @@ using Ardalis.Specification;
 using Ardalis.Specification.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 using simpleShare_backend.Common;
+using simpleShare_backend.Common.Exceptions;
 using simpleShare_backend.Data;
 using simpleShare_backend.Models;
 using simpleShare_backend.Models.Base;
@@ -19,7 +20,7 @@ public class RepositoryAsync(ApplicationDbContext dbContext) : IRepositoryAsync
         query = FilterSoftDeleted<T, TId>(query);
 
         T entity = await query.FirstOrDefaultAsync(e => e.Id!.Equals(id), cancellationToken: ct)
-         ?? throw new Exception("Entity not found!");
+            ?? throw new NotFoundAppException("entity_not_found", "Entity not found!");
 
         return entity;
     }
@@ -110,7 +111,7 @@ public class RepositoryAsync(ApplicationDbContext dbContext) : IRepositoryAsync
         catch (Exception e)
         {
             totalCount = 0;
-            throw new Exception("Error fetching entities: " + e.Message);
+            throw new ConflictAppException("entity_fetch_error", "Error fetching entities: " + e.Message);
         }
     }
 
@@ -138,10 +139,10 @@ public class RepositoryAsync(ApplicationDbContext dbContext) : IRepositoryAsync
     {
 
         if (dbContext.Entry(entity).State == EntityState.Unchanged)
-            throw new Exception("Nothing to save!");
+            throw new ConflictAppException("not_data", "Nothing to save!");
 
         T dbEntity = await dbContext.Set<T>().FindAsync(entity.Id)
-            ?? throw new Exception("Entity not found!");
+            ?? throw new NotFoundAppException("entity_not_found", "Entity not found!");
 
         dbContext.Entry(dbEntity).CurrentValues.SetValues(entity);
         return entity;
@@ -150,10 +151,10 @@ public class RepositoryAsync(ApplicationDbContext dbContext) : IRepositoryAsync
     public async Task<T> DeleteAsync<T, TId>(TId entityId) where T : BaseModel<TId>, IDeletable
     {
         T dbEntity = await dbContext.Set<T>().FindAsync(entityId)
-            ?? throw new Exception("Entity not found!");
+            ?? throw new NotFoundAppException("entity_not_found", "Entity not found!");
 
         if (dbEntity.DeletedAt != null)
-            throw new Exception("Entity already deleted!");
+            throw new ConflictAppException("entity_deleted", "Entity already deleted!");
 
         dbEntity.DeletedAt = DateTime.UtcNow;
         return dbEntity;
@@ -167,10 +168,10 @@ public class RepositoryAsync(ApplicationDbContext dbContext) : IRepositoryAsync
     public async Task<T> RestoreAsync<T, TId>(TId entityId) where T : BaseModel<TId>, IDeletable
     {
         T dbEntity = await dbContext.Set<T>().FindAsync(entityId)
-            ?? throw new Exception("Entity not found!");
+            ?? throw new NotFoundAppException("entity_not_found", "Entity not found!");
 
         if (dbEntity.DeletedAt == null)
-            throw new Exception("Entity is not deleted!");
+            throw new ConflictAppException("entity_not_deleted", "Entity is not deleted!");
 
         dbEntity.DeletedAt = null;
         return dbEntity;

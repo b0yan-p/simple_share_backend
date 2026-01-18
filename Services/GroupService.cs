@@ -3,6 +3,7 @@ using simpleShare_backend.Infrastructure;
 using simpleShare_backend.Domain;
 using simpleShare_backend.Services.Specifications;
 using simpleShare_backend.Common;
+using simpleShare_backend.Common.Exceptions;
 using simpleShare_backend.Common.Extensions;
 using simpleShare_backend.Models.Domain;
 using simpleShare_backend.Contracts.Balances;
@@ -32,11 +33,12 @@ public class GroupService(
         var member = await memberService.GetMemberByUserIdAsync(userId);
 
         if (member?.DeletedAt is not null)
-            throw new Exception("Member with this id is deleted!");
+            throw new ConflictAppException("member_deleted", "Member with this id is deleted!");
 
         if (member is null)
         {
-            var user = await userService.GetUserAsync(userId) ?? throw new Exception("User not found");
+            var user = await userService.GetUserAsync(userId)
+                ?? throw new NotFoundAppException("user_not_found", "User not found");
             member = await memberService.CreateMemberFromUserAsync(user);
         }
 
@@ -59,10 +61,10 @@ public class GroupService(
     public async Task<GroupResponse> UpdateGroupAsync(CreateGroupRequest request)
     {
         if (request.Id == null)
-            throw new Exception("Group ID is required for update.");
+            throw new ValidationAppException("invalid_request", "Group ID is required for update.");
 
         var dbGroup = await repo.GetByIdAsync<Group, Guid>(request.Id.Value, null)
-            ?? throw new Exception("Group is not found");
+            ?? throw new NotFoundAppException("group_not_found", "Group is not found");
 
         dbGroup.ModifiedAt = DateTime.UtcNow;
         dbGroup.Name = request.Name;
@@ -93,7 +95,7 @@ public class GroupService(
     public async Task<GroupResponse> GetGroupAsync(Guid id)
     {
         var group = await repo.GetByIdAsync<Group, Guid>(id)
-            ?? throw new Exception("Group not found!");
+            ?? throw new NotFoundAppException("group_not_found", "Group not found!");
 
         GroupResponse response = new()
         {
@@ -118,7 +120,7 @@ public class GroupService(
     public async Task<BalanceResponse> GetGroupBalancesAsync(Guid groupId, Guid userId)
     {
         var _ = await GetGroupAsync(groupId)
-            ?? throw new Exception("Group does not exist!");
+            ?? throw new NotFoundAppException("group_not_found", "Group does not exist!");
 
         var result = await balanceService.GetGroupBalancesAsync(groupId, userId);
 
@@ -132,10 +134,11 @@ public class GroupService(
 
     public async Task<GroupOverviewResponse> GetGroupOverviewAsync(Guid groupId, Guid userId)
     {
-        var group = await repo.GetByIdAsync<Group, Guid>(groupId);
+        var group = await repo.GetByIdAsync<Group, Guid>(groupId)
+            ?? throw new NotFoundAppException("group_not_found", "Group not found!");
         var memberCount = await gmRepo.GetGroupMemberCountAsync(groupId);
         var member = await memberService.GetMemberByUserIdAsync(userId)
-            ?? throw new Exception("Member not found!");
+            ?? throw new NotFoundAppException("member_not_found", "Member not found!");
 
         GroupOverviewResponse response = new()
         {

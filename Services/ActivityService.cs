@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using simpleShare_backend.Common;
+using simpleShare_backend.Common.Exceptions;
 using simpleShare_backend.Contracts.Activity;
 using simpleShare_backend.Data;
 using simpleShare_backend.Models.Application.Activity;
@@ -64,7 +65,7 @@ public class ActivityService(
      )
     {
         var member = await memberService.GetMemberByUserIdAsync(userId)
-            ?? throw new Exception("Member not found!");
+            ?? throw new NotFoundAppException("member_not_found", "Member not found!");
 
         // Fetch all groupIds where i am member at
         var groupIds = await db.GroupMembers

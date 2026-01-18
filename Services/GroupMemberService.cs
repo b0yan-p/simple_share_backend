@@ -1,3 +1,4 @@
+using simpleShare_backend.Common.Exceptions;
 using simpleShare_backend.Common.Extensions;
 using simpleShare_backend.Contracts.Member;
 using simpleShare_backend.Infrastructure;
@@ -19,7 +20,7 @@ public class GroupMemberService(
     public async Task<GroupMember?> AddExistingMemberIntoGroupAsync(Guid memberId, Guid groupId)
     {
         var member = await memberService.GetMemberAsync(memberId)
-            ?? throw new Exception("Member does not exist");
+            ?? throw new NotFoundAppException("member_not_found", "Member does not exist");
 
         return await CreateGroupMemberDefaultAsync(member, groupId);
     }
@@ -48,13 +49,13 @@ public class GroupMemberService(
             return groupMemberRepo.UpdateGroupMember(gm);
         }
         else
-            throw new Exception("Member is already joined at this group");
+            throw new ConflictAppException("member_already_in_group", "Member is already joined at this group");
     }
 
     public async Task<ICollection<GroupMemberResponse>> GetAllGroupMembersAsync(Guid groupId)
     {
         _ = await groupService.GetGroupAsync(groupId)
-            ?? throw new Exception("Group does not exist!");
+            ?? throw new NotFoundAppException("group_not_found", "Group does not exist!");
 
         var members = await groupMemberRepo.GetAllAsync(groupId);
 
@@ -64,7 +65,7 @@ public class GroupMemberService(
     public async Task<ICollection<GroupMember>> GetAllGroupMembersDefaultAsync(Guid groupId)
     {
         _ = await groupService.GetGroupAsync(groupId)
-             ?? throw new Exception("Group does not exist!");
+             ?? throw new NotFoundAppException("group_not_found", "Group does not exist!");
 
         return await groupMemberRepo.GetAllAsync(groupId);
     }
@@ -72,10 +73,10 @@ public class GroupMemberService(
     public async Task<GroupMember> GetGroupMemberAsync(Guid groupId, Guid memberId)
     {
         var gm = await groupMemberRepo.GetGroupMemberDefaultAsync(groupId, memberId)
-            ?? throw new Exception("Member does not exist");
+            ?? throw new NotFoundAppException("member_not_found", "Member does not exist");
 
         if (gm.LeftAt is not null || gm.GroupMemberStatus == GroupMemberStatus.Deleted)
-            throw new Exception("Member does not exist in this group");
+            throw new NotFoundAppException("member_not_in_group", "Member does not exist in this group");
 
         return gm;
     }
@@ -98,28 +99,31 @@ public class GroupMemberService(
     public async Task<GroupMember> RemoveGroupMemberAsync(Guid groupId, Guid memberId, Guid userId)
     {
         _ = await groupService.GetGroupAsync(groupId)
-           ?? throw new Exception("Group does not exist");
+           ?? throw new NotFoundAppException("group_not_found", "Group does not exist");
 
         var memberOwner = await memberService.GetMemberByUserIdAsync(userId)
-            ?? throw new Exception("Not authorized to remove members");
+            ?? throw new ForbiddenAppException("not_authorized", "Not authorized to remove members");
 
         var groupMemberOwner = await GetGroupMemberAsync(groupId, memberOwner.Id);
         if (groupMemberOwner is null || groupMemberOwner.GroupRole != GroupRole.Owner)
-            throw new Exception("Not authorized to remove members");
+            throw new ForbiddenAppException("not_authorized", "Not authorized to remove members");
 
         if (memberId == groupMemberOwner.MemberId)
-            throw new Exception("You cannot remove yourself from group");
+            throw new ValidationAppException("invalid_request", "You cannot remove yourself from group");
 
         var gm = await groupMemberRepo.GetGroupMemberDefaultAsync(groupId, memberId)
-            ?? throw new Exception("Member does not exist in this group!");
+            ?? throw new NotFoundAppException("member_not_in_group", "Member does not exist in this group!");
 
         if (gm.LeftAt is not null || gm.GroupMemberStatus == GroupMemberStatus.Deleted)
-            throw new Exception("Member is already removed from group");
+            throw new ConflictAppException("member_already_removed", "Member is already removed from group");
 
         var (paid, owed, net) = await balanceService.GetMemberNetInGroupAsync(groupId, memberId);
 
         if (Math.Abs(net) >= 0.01m)
-            throw new Exception($"Member cannot leave group. Net is {net:0.00} (Paid {paid:0.00}, Owed {owed:0.00}).");
+            throw new ConflictAppException(
+                "member_has_balance",
+                $"Member cannot leave group. Net is {net:0.00} (Paid {paid:0.00}, Owed {owed:0.00})."
+            );
 
         gm.LeftAt = DateTime.UtcNow;
         gm.GroupMemberStatus = GroupMemberStatus.Deleted;

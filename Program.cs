@@ -1,7 +1,9 @@
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
+using simpleShare_backend.Common.Exceptions;
 using simpleShare_backend.Data;
 using simpleShare_backend.Infrastructure;
 using simpleShare_backend.Interfaces;
@@ -11,8 +13,9 @@ using simpleShare_backend.Services.Interfaces;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Add services to the container.
-// Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
+builder.Services.AddProblemDetails();
+builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
+
 builder.Services
     .AddOpenApi()
     .AddEndpointsApiExplorer()
@@ -59,7 +62,27 @@ builder.Services.AddAuthentication(options =>
     }
 );
 
-builder.Services.AddControllers();
+builder.Services.AddControllers()
+    .ConfigureApiBehaviorOptions(options =>
+    {
+        options.InvalidModelStateResponseFactory = context =>
+        {
+            var pd = new ProblemDetails
+            {
+                Status = StatusCodes.Status400BadRequest,
+                Title = "Validation failed",
+                Detail = "Invalid request body",
+                Type = "https://httpstatuses.com/400"
+            };
+            pd.Extensions["code"] = "validation_error";
+            pd.Extensions["traceId"] = context.HttpContext.TraceIdentifier;
+
+            return new BadRequestObjectResult(pd)
+            {
+                ContentTypes = { "application/problem+json" }
+            };
+        };
+    }); ;
 builder.Services.AddAuthorization();
 
 builder.Services.AddCors(options =>
@@ -106,6 +129,8 @@ if (app.Environment.IsDevelopment())
 app.UseCors("AllowAll");
 
 app.UseHttpsRedirection();
+
+app.UseExceptionHandler();
 
 app.UseAuthentication();
 app.UseAuthorization();

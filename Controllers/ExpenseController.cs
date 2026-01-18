@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using simpleShare_backend.Common;
+using simpleShare_backend.Common.Exceptions;
 using simpleShare_backend.Common.Extensions;
 using simpleShare_backend.Contracts.Expenses;
 using simpleShare_backend.Services;
@@ -20,7 +21,9 @@ public class ExpenseController(IExpenseService service) : ControllerBase
     )
     {
         if (!ModelState.IsValid)
-            throw new Exception("Invalid input");
+        {
+            throw new ValidationAppException("invalid_request", "Invalid request data");
+        }
 
         var result = await service.SaveExpenseAsync(groupId, request, User!.GetUserId());
         return result;
@@ -52,7 +55,7 @@ public class ExpenseController(IExpenseService service) : ControllerBase
     )
     {
         if (!ModelState.IsValid)
-            throw new Exception("Invalid input");
+            throw new ValidationAppException("invalid_request", "Invalid input");
 
         return await service.UpdateExpenseAsync(groupId, request, User.GetUserId());
     }
@@ -71,7 +74,7 @@ public class ExpenseController(IExpenseService service) : ControllerBase
     public async Task<IActionResult> SettleUpDebtAsync([FromRoute] Guid groupId, SettleUpRequest request)
     {
         if (!ModelState.IsValid)
-            throw new Exception("Invalid request!");
+            throw new ValidationAppException("invalid_request", "Invalid request!");
 
         var result = await service.SettleUpDebtAsync(groupId, request, User.GetUserId());
 
@@ -81,4 +84,3 @@ public class ExpenseController(IExpenseService service) : ControllerBase
         return NoContent();
     }
 }
-

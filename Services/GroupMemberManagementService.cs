@@ -1,5 +1,6 @@
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
+using simpleShare_backend.Common.Exceptions;
 using simpleShare_backend.Common.Extensions;
 using simpleShare_backend.Contracts.Member;
 using simpleShare_backend.Data;
@@ -26,10 +27,10 @@ IGroupService groupService,
     {
 
         _ = await groupService.GetGroupAsync(groupId)
-            ?? throw new Exception("GroupId does not exist");
+            ?? throw new NotFoundAppException("group_not_found", "Group does not exist!");
 
         var meMember = await memberService.GetMemberByUserIdAsync(userId)
-            ?? throw new Exception("Member not found!");
+            ?? throw new NotFoundAppException("member_not_found", "Member does not exist!");
 
         AddGroupMembersResponse response = new();
 

@@ -1,3 +1,4 @@
+using simpleShare_backend.Common.Exceptions;
 using simpleShare_backend.Contracts.Member;
 using simpleShare_backend.Infrastructure;
 using simpleShare_backend.Models.Domain;
@@ -29,10 +30,10 @@ public class MemberService(IRepositoryAsync repo) : IMemberService
     public async Task<Member?> GetOrCreateVirtualMemberAsync(AddGroupMemberItemRequest input)
     {
         if (string.IsNullOrEmpty(input.DisplayName))
-            throw new Exception("Display name cannot be empty!");
+            throw new ValidationAppException("invalid_request", "Invalid request data!");
 
         if (input.InviteUser && string.IsNullOrEmpty(input.Email))
-            throw new Exception("Email is required");
+            throw new ValidationAppException("email_required", "Email is required");
 
         if (input.InviteUser)
         {

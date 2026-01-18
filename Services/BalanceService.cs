@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using simpleShare_backend.Common.Exceptions;
 using simpleShare_backend.Data;
 using simpleShare_backend.Models.Application;
 using simpleShare_backend.Models.Enums;
@@ -13,7 +14,7 @@ public class BalanceService(
     public async Task<GroupBalances> GetGroupBalancesAsync(Guid groupId, Guid userId, CancellationToken ct = default)
     {
         var myMember = await memberService.GetMemberByUserIdAsync(userId)
-            ?? throw new Exception("Member does not exist");
+            ?? throw new NotFoundAppException("member_not_found", "Member does not exist!");
 
         var isActive = await db.GroupMembers
             .AsNoTracking()
@@ -24,7 +25,7 @@ public class BalanceService(
             .AnyAsync(cancellationToken: ct);
 
         if (!isActive)
-            throw new Exception("You are not an active member of this group.");
+            throw new NotFoundAppException("member_not_found", "Member not found in group");
 
         var activeMembers = await db.GroupMembers
             .AsNoTracking()

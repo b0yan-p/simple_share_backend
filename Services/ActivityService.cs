@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Microsoft.EntityFrameworkCore;
 using simpleShare_backend.Common;
 using simpleShare_backend.Common.Exceptions;
@@ -16,6 +17,8 @@ public class ActivityService(
     IMemberService memberService
 ) : IActivityService
 {
+    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+
     public ActivityEvent<ExpenseUpdatedActivityData> AddExpenseUpdatedActivity(
         Expense oldExpense,
         Expense newExpense,
@@ -107,6 +110,30 @@ public class ActivityService(
             })
             .ToListAsync(ct);
 
+        var settleUpMemberIds = new HashSet<Guid>();
+        foreach (var row in rows)
+        {
+            if (row.EntityType != ActivityEntityType.SettleUp)
+                continue;
+
+            if (TryReadSettleUpData(row.DataJson, out var settleUpData))
+            {
+                if (settleUpData.FromMemberId != Guid.Empty)
+                    settleUpMemberIds.Add(settleUpData.FromMemberId);
+
+                if (settleUpData.ToMemberId != Guid.Empty)
+                    settleUpMemberIds.Add(settleUpData.ToMemberId);
+            }
+        }
+
+        var memberNames = settleUpMemberIds.Count == 0
+            ? []
+            : await db.Members
+                .AsNoTracking()
+                .Where(m => settleUpMemberIds.Contains(m.Id))
+                .Select(m => new { m.Id, m.DisplayName })
+                .ToDictionaryAsync(m => m.Id, m => m.DisplayName, ct);
+
         var activities = rows.Select(a => new ActivityResponse
         {
             Id = a.Id,
@@ -116,12 +143,49 @@ public class ActivityService(
             ActorName = a.ActorName,
 
             GroupName = a.GroupName,
-            Data = JsonSerializer.Deserialize<JsonElement>(a.DataJson),
+            Data = BuildActivityData(a.EntityType, a.DataJson, memberNames),
             EntityId = a.EntityId,
             EntityType = a.EntityType,
             Type = a.Type
         }).ToList();
 
         return new PageResponse<ActivityResponse>(activities, totalCount, skip, take);
+    }
+
+    private static JsonElement BuildActivityData(
+        ActivityEntityType entityType,
+        string dataJson,
+        IReadOnlyDictionary<Guid, string> memberNames
+    )
+    {
+        if (entityType != ActivityEntityType.SettleUp)
+            return JsonSerializer.Deserialize<JsonElement>(dataJson);
+
+        if (!TryReadSettleUpData(dataJson, out var settleUpData))
+            return JsonSerializer.Deserialize<JsonElement>(dataJson);
+
+        var node = JsonNode.Parse(dataJson) as JsonObject ?? new JsonObject();
+
+        if (memberNames.TryGetValue(settleUpData.FromMemberId, out var fromName))
+            node["fromMemberName"] = fromName;
+
+        if (memberNames.TryGetValue(settleUpData.ToMemberId, out var toName))
+            node["toMemberName"] = toName;
+
+        return JsonSerializer.SerializeToElement(node);
+    }
+
+    private static bool TryReadSettleUpData(string json, out SettleUpActivityData data)
+    {
+        try
+        {
+            data = JsonSerializer.Deserialize<SettleUpActivityData>(json, JsonOptions);
+            return data is not null;
+        }
+        catch (JsonException)
+        {
+            data = default!;
+            return false;
+        }
     }
 }

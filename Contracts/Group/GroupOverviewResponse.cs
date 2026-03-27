@@ -6,4 +6,5 @@ public class GroupOverviewResponse
     public string Name { get; set; } = string.Empty;
     public MySummaryResponse MyDebtSummary { get; set; } = default!;
     public int MemberCount { get; set; }
+    public Guid CurrentMemberId { get; set; }
 }

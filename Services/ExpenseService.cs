@@ -202,7 +202,7 @@ public class ExpenseService(
         var expenses = await db.Expenses
             .AsNoTracking()
             .Where(e => e.DeletedAt == null && e.GroupId == groupId)
-            .OrderByDescending(e => e.ExpenseDate)
+            .OrderByDescending(e => e.CreatedAt)
             .ThenByDescending(e => e.Id)
             .Skip(skip)
             .Take(take)
@@ -211,6 +211,7 @@ public class ExpenseService(
                 e.Id,
                 e.Description,
                 e.ExpenseDate,
+                e.CreatedAt,
                 e.TotalAmount,
                 e.IsSettleUp,
 
@@ -230,6 +231,7 @@ public class ExpenseService(
             Id = e.Id,
             Description = e.Description,
             ExpenseDate = e.ExpenseDate,
+            CreatedAt = e.CreatedAt,
             IsSettleUp = e.IsSettleUp ?? false,
             Amount = Math.Round(e.TotalAmount, 2, MidpointRounding.AwayFromZero),
             PaidByMembers = [.. e.PaidByMembers],

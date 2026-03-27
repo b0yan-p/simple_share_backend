@@ -122,11 +122,15 @@ public class GroupService(
         var _ = await GetGroupAsync(groupId)
             ?? throw new NotFoundAppException("group_not_found", "Group does not exist!");
 
+        var member = await memberService.GetMemberByUserIdAsync(userId)
+            ?? throw new NotFoundAppException("member_not_found", "Member not found!");
+
         var result = await balanceService.GetGroupBalancesAsync(groupId, userId);
 
         return new()
         {
             GroupId = groupId,
+            CurrentMemberId = member.Id,
             Members = result.Members,
             Debts = result.Debts
         };
@@ -145,7 +149,8 @@ public class GroupService(
             Id = group.Id,
             Name = group.Name,
             MyDebtSummary = new MySummaryResponse(),
-            MemberCount = memberCount
+            MemberCount = memberCount,
+            CurrentMemberId = member.Id
         };
 
         var balances = await balanceService.GetGroupBalancesAsync(groupId, userId);

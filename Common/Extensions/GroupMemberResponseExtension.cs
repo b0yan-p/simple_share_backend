@@ -13,6 +13,7 @@ public static class GroupMemberResponseExtension
             GroupMemberStatus = other.GroupMemberStatus,
             GroupRole = other.GroupRole,
             MemberId = other.MemberId,
+            UserId = other.Member.UserId,
             JoinedAt = other.JoinedAt
         };
     }

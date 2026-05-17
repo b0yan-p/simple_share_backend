@@ -13,7 +13,7 @@ public static class GroupResponseExtension
             Name = group.Name,
             SimplifyDebts = group.SimplifyDebts,
             CreatedAt = group.CreatedAt,
-            DeletedAt = group.DeletedAt
+            DeletedAt = group.DeletedAt,
         };
     }
 }

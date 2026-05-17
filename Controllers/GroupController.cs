@@ -1,4 +1,3 @@
-
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -57,7 +56,7 @@ public class GroupController(IGroupService service) : ControllerBase
         [FromQuery] string? query = ""
     )
     {
-        return await service.GetMyGroupsAsync(skip, take, query);
+        return await service.GetMyGroupsAsync(skip, take, User.GetUserId(), query);
     }
 
     [HttpDelete("{groupId}")]

@@ -1,13 +1,15 @@
+using Microsoft.EntityFrameworkCore;
 using simpleShare_backend.Common;
 using simpleShare_backend.Common.Exceptions;
 using simpleShare_backend.Common.Extensions;
 using simpleShare_backend.Contracts.Balances;
 using simpleShare_backend.Contracts.Group;
+using simpleShare_backend.Data;
 using simpleShare_backend.Domain;
 using simpleShare_backend.Infrastructure;
 using simpleShare_backend.Models.Application;
 using simpleShare_backend.Models.Domain;
-using simpleShare_backend.Services.Specifications;
+using simpleShare_backend.Models.Enums;
 
 namespace simpleShare_backend.Services;
 
@@ -16,7 +18,8 @@ public class GroupService(
     IGroupMemberRepository gmRepo,
     IMemberService memberService,
     IUserService userService,
-    IBalanceService balanceService
+    IBalanceService balanceService,
+    ApplicationDbContext db
 ) : IGroupService
 {
     public async Task<GroupResponse> CreateGroupAsync(CreateGroupRequest request, Guid userId)
@@ -113,14 +116,93 @@ public class GroupService(
     public async Task<PageResponse<GroupResponse>> GetMyGroupsAsync(
         int skip,
         int take,
+        Guid userId,
         string? query = ""
     )
     {
-        GroupSearchList spec = new(query);
-        var result = await repo.GetAllAsync<Group, Guid>(skip, take, spec);
-        var list = result.Data.Select(g => g.ToResponse()).ToList();
+        var myMemberId =
+            await db
+                .Members.AsNoTracking()
+                .Where(m => m.UserId == userId && m.DeletedAt == null)
+                .Select(m => (Guid?)m.Id)
+                .FirstOrDefaultAsync()
+            ?? throw new NotFoundAppException("member_not_found", "Member not found!");
 
-        PageResponse<GroupResponse> mappedResult = new(list, result.TotalCount, skip, take);
+        var groupsQuery = db
+            .Groups.AsNoTracking()
+            .Where(g =>
+                g.DeletedAt == null
+                && g.GroupMembers.Any(gm =>
+                    gm.MemberId == myMemberId
+                    && gm.LeftAt == null
+                    && gm.GroupMemberStatus != GroupMemberStatus.Deleted
+                )
+            );
+
+        if (!string.IsNullOrWhiteSpace(query))
+            groupsQuery = groupsQuery.Where(g => g.Name.Contains(query));
+
+        var orderedGroups = groupsQuery
+            .OrderByDescending(g => g.ModifiedAt)
+            .ThenByDescending(g => g.CreatedAt);
+
+        var totalCount = await groupsQuery.CountAsync();
+        var pagedGroupsQuery = take == -1 ? orderedGroups : orderedGroups.Skip(skip).Take(take);
+
+        var pagedGroups = await pagedGroupsQuery
+            .Select(g => new
+            {
+                g.Id,
+                g.Name,
+                g.SimplifyDebts,
+                g.CreatedAt,
+                g.DeletedAt,
+            })
+            .ToListAsync();
+
+        var groupIds = pagedGroups.Select(g => g.Id).ToList();
+
+        var paidByGroup = await db
+            .ExpensePayments.AsNoTracking()
+            .Where(p =>
+                p.PaidByMemberId == myMemberId
+                && p.Expense.DeletedAt == null
+                && groupIds.Contains(p.Expense.GroupId)
+            )
+            .GroupBy(p => p.Expense.GroupId)
+            .Select(g => new { GroupId = g.Key, Amount = g.Sum(x => x.Amount) })
+            .ToDictionaryAsync(x => x.GroupId, x => x.Amount);
+
+        var owedByGroup = await db
+            .ExpenseSplits.AsNoTracking()
+            .Where(s =>
+                s.OwedByMemberId == myMemberId
+                && s.Expense.DeletedAt == null
+                && groupIds.Contains(s.Expense.GroupId)
+            )
+            .GroupBy(s => s.Expense.GroupId)
+            .Select(g => new { GroupId = g.Key, Amount = g.Sum(x => x.Amount) })
+            .ToDictionaryAsync(x => x.GroupId, x => x.Amount);
+
+        var list = pagedGroups
+            .Select(g =>
+            {
+                paidByGroup.TryGetValue(g.Id, out var paid);
+                owedByGroup.TryGetValue(g.Id, out var owed);
+
+                return new GroupResponse
+                {
+                    Id = g.Id,
+                    Name = g.Name,
+                    SimplifyDebts = g.SimplifyDebts,
+                    CreatedAt = g.CreatedAt,
+                    DeletedAt = g.DeletedAt,
+                    NetBalance = paid - owed,
+                };
+            })
+            .ToList();
+
+        PageResponse<GroupResponse> mappedResult = new(list, totalCount, skip, take);
         return mappedResult;
     }
 

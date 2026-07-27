@@ -2,17 +2,21 @@ using System.Net;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using simpleShare_backend.Contracts.Auth;
+using simpleShare_backend.Infrastructure;
 using simpleShare_backend.Interfaces;
 using simpleShare_backend.Models.Identity;
+using simpleShare_backend.Services;
 
 namespace simpleShare_backend.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
-    public class AuthController(UserManager<User> userManager, ITokenService tokenService) : ControllerBase
+    public class AuthController(UserManager<User> userManager, ITokenService tokenService, IMemberService memberService, IRepositoryAsync repo) : ControllerBase
     {
         private readonly UserManager<User> _userManager = userManager;
         private readonly ITokenService _tokenService = tokenService;
+        private readonly IMemberService _memberService = memberService;
+        private readonly IRepositoryAsync _repo = repo;
 
         [HttpPost("register")]
         public async Task<IActionResult> RegisterAsync([FromBody] RegisterRequest input)
@@ -40,6 +44,13 @@ namespace simpleShare_backend.Controllers
                 var roleResult = await _userManager.AddToRoleAsync(user, "User");
                 if (!roleResult.Succeeded)
                     return StatusCode((int)HttpStatusCode.InternalServerError, roleResult.Errors);
+
+                var existingMember = await _memberService.GetMemberByUserIdAsync(user.Id);
+                if (existingMember is null)
+                {
+                    await _memberService.CreateMemberFromUserAsync(user);
+                    await _repo.SaveChangesAsync();
+                }
 
                 var roles = await _userManager.GetRolesAsync(user);
                 return Ok(

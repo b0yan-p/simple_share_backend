@@ -41,16 +41,16 @@ public class ApplicationDbContext(DbContextOptions dbContextOptions)
         builder.Entity<Member>()
             .HasIndex(m => m.UserId)
             .IsUnique()
-            .HasFilter("[UserId] IS NOT NULL");
+            .HasFilter("\"UserId\" IS NOT NULL");
 
         builder.Entity<Member>()
             .HasIndex(m => m.NormalizedEmail)
             .IsUnique()
-            .HasFilter("[NormalizedEmail] IS NOT NULL");
+            .HasFilter("\"NormalizedEmail\" IS NOT NULL");
 
         builder.Entity<GroupMember>()
             .HasIndex(x => new { x.GroupId, x.MemberId })
-            .HasFilter("[LeftAt] IS NULL AND [GroupMemberStatus] <> 0");
+            .HasFilter("\"LeftAt\" IS NULL AND \"GroupMemberStatus\" <> 0");
 
         builder.Entity<Expense>()
             .HasIndex(e => new { e.GroupId, e.ExpenseDate });
@@ -58,7 +58,7 @@ public class ApplicationDbContext(DbContextOptions dbContextOptions)
             .HasIndex(e => new { e.GroupId, e.CreatedAt });
         builder.Entity<Expense>()
             .HasIndex(e => e.GroupId)
-            .HasFilter("[DeletedAt] IS NULL");
+            .HasFilter("\"DeletedAt\" IS NULL");
 
         builder.Entity<ExpensePayment>()
             .HasIndex(e => new { e.PaidByMemberId, e.ExpenseId });
@@ -173,8 +173,8 @@ public class ApplicationDbContext(DbContextOptions dbContextOptions)
         builder.Entity<UserConnection>()
             .ToTable(t =>
             {
-                t.HasCheckConstraint("CK_UserConnection_NotSelf", "[UserAId] <> [UserBId]");
-                t.HasCheckConstraint("CK_UserConnection_Ordered", "[UserAId] < [UserBId]");
+                t.HasCheckConstraint("CK_UserConnection_NotSelf", "\"UserAId\" <> \"UserBId\"");
+                t.HasCheckConstraint("CK_UserConnection_Ordered", "\"UserAId\" < \"UserBId\"");
             });
 
         #endregion
@@ -187,7 +187,7 @@ public class ApplicationDbContext(DbContextOptions dbContextOptions)
 
             b.Property(x => x.DataJson)
                 .IsRequired()
-                .HasColumnType("nvarchar(max)");
+                .HasColumnType("text");
 
             b.HasOne(x => x.Group)
                 .WithMany(g => g.Activities)
@@ -215,7 +215,7 @@ public class ApplicationDbContext(DbContextOptions dbContextOptions)
             b.Property(x => x.LastError).HasMaxLength(2000);
             b.Property(x => x.PayloadJson)
                 .IsRequired()
-                .HasColumnType("nvarchar(max)");
+                .HasColumnType("text");
 
             b.HasIndex(x => new { x.ProcessedAt, x.CreatedAt, x.Id });
         });
@@ -227,7 +227,10 @@ public class ApplicationDbContext(DbContextOptions dbContextOptions)
             new() {
                     Name = "User",
                     NormalizedName = "USER",
-                    Id = Guid.Parse("69d32c02-ba22-4ac6-bacf-2daa921f4993")
+                    Id = Guid.Parse("69d32c02-ba22-4ac6-bacf-2daa921f4993"),
+                    // Static stamp so the seeded model is deterministic (avoids
+                    // PendingModelChangesWarning from an auto-generated stamp).
+                    ConcurrencyStamp = "b1c9e6d4-0f2a-4c3e-8a7b-1d5e9f0a2b3c"
                 }
         ];
 

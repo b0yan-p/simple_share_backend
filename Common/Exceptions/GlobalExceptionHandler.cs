@@ -1,7 +1,7 @@
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Data.SqlClient;
+using Npgsql;
 
 namespace simpleShare_backend.Common.Exceptions;
 
@@ -90,10 +90,10 @@ public class GlobalExceptionHandler(
             return (StatusCodes.Status409Conflict, "Conflict", cfx.Code, null);
 
         // 2) DB unique constraint / duplicate key -> 409
-        // SQL Server: 2627 (PK/Unique violation), 2601 (unique index)
+        // PostgreSQL: 23505 (unique_violation)
         if (ex is DbUpdateException dbEx &&
-            dbEx.InnerException is SqlException sqlEx &&
-            (sqlEx.Number == 2627 || sqlEx.Number == 2601))
+            dbEx.InnerException is PostgresException pgEx &&
+            pgEx.SqlState == PostgresErrorCodes.UniqueViolation)
         {
             return (StatusCodes.Status409Conflict, "Conflict", "unique_constraint", null);
         }

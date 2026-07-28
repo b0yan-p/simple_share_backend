@@ -22,7 +22,7 @@ builder.Services
     .AddSwaggerGen()
     .AddDbContext<ApplicationDbContext>(options =>
         {
-            options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection"));
+            options.UseNpgsql(builder.Configuration.GetConnectionString("Default"));
         })
     .AddIdentity<User, IdentityRole<Guid>>(options =>
         {
@@ -115,6 +115,8 @@ builder.Services.AddScoped<IActivityWriter, ActivityWriter>();
 #endregion
 
 var app = builder.Build();
+
+await DbSeeder.SeedUsersAsync(app.Services);
 
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())

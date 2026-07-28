@@ -1,6 +1,5 @@
 using simpleShare_backend.Data;
 using simpleShare_backend.Models.Domain;
-using System.Data.SqlTypes;
 using Microsoft.EntityFrameworkCore;
 using simpleShare_backend.Contracts.Member;
 
@@ -15,7 +14,9 @@ public class UserConnectionService(ApplicationDbContext db) : IUserConnectionSer
             .Distinct()
             .ToList();
 
-        ids.Sort((x, y) => new SqlGuid(x).CompareTo(new SqlGuid(y)));
+        // Match PostgreSQL's uuid ordering (canonical big-endian byte order) so the
+        // "UserAId < UserBId" check constraint is satisfied.
+        ids.Sort((x, y) => string.CompareOrdinal(x.ToString(), y.ToString()));
         var idSet = ids.ToHashSet();
 
         if (idSet.Count < 2)

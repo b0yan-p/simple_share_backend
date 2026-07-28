@@ -1,4 +1,4 @@
-using Microsoft.Data.SqlClient;
+using Npgsql;
 using Microsoft.EntityFrameworkCore;
 using simpleShare_backend.Common.Exceptions;
 using simpleShare_backend.Common.Extensions;
@@ -117,8 +117,8 @@ IGroupService groupService,
         }
         catch (DbUpdateException ex)
         when (
-            ex.InnerException is SqlException sqlEx &&
-            (sqlEx.Number == 2627 || sqlEx.Number == 2601)
+            ex.InnerException is PostgresException pgEx &&
+            pgEx.SqlState == PostgresErrorCodes.UniqueViolation
         )
         {
             dbContext.ChangeTracker.Clear();

@@ -56,6 +56,52 @@ The API will be available at `https://localhost:5169` (or the configured port).
 
 Swagger UI is available in development mode at `/swagger`.
 
+## Container image & releases
+
+`.github/workflows/publish.yml` builds the Docker image and pushes it to GHCR.
+
+| Trigger | Image tags produced |
+|---|---|
+| push to `main` | `:latest`, `:sha-<short>` |
+| push tag `v1.2.3` | `:1.2.3`, `:1.2`, `:sha-<short>` + a GitHub Release |
+
+Image: `ghcr.io/b0yan-p/simple_share_backend`
+
+`:latest` is the moving tag the deployment follows. `:sha-<short>` is immutable -
+that is the one to pin when rolling back a bad `:latest`.
+
+### Cutting a release
+
+```bash
+git checkout main && git pull
+git tag v0.2.0
+git push origin v0.2.0
+```
+
+Release notes are generated automatically. **They list merged pull requests
+only** - commits pushed straight to `main` do not appear as entries, and are
+covered only by the "Full Changelog" compare link. Work through PRs if the
+changelog should be readable.
+
+### Building locally
+
+```bash
+docker build -t simpleshare-api .
+```
+
+### Pulling
+
+The package is private and inherits this repository's permissions, so a pull
+needs a personal access token (classic) with the `read:packages` scope:
+
+```bash
+echo "$PAT" | docker login ghcr.io -u YOUR_GITHUB_USERNAME --password-stdin
+docker pull ghcr.io/b0yan-p/simple_share_backend:latest
+```
+
+Publishing itself needs no token - the workflow uses the built-in
+`GITHUB_TOKEN`.
+
 ## Tech Stack
 
 - .NET 9.0

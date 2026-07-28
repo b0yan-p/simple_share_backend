@@ -1,0 +1,24 @@
+# Build output - never ship the host's bin/obj into the image, it breaks
+# restore inside the container and bloats the build context.
+**/bin
+**/obj
+
+# VCS and CI
+.git
+.gitignore
+.github
+
+# Editor / IDE
+.vs
+.vscode
+**/*.user
+**/*.suo
+
+# Local-only config: contains the developer's own connection string
+appsettings.Development.json
+
+# Not needed at build time
+Dockerfile
+.dockerignore
+README.md
+**/*.http

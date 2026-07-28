@@ -59,6 +59,13 @@ public class GroupController(IGroupService service) : ControllerBase
         return await service.GetMyGroupsAsync(skip, take, User.GetUserId(), query);
     }
 
+    [Authorize]
+    [HttpGet("recent")]
+    public async Task<List<GroupResponse>> GetRecentGroupsAsync([FromQuery] int take = 3)
+    {
+        return await service.GetRecentGroupsAsync(User.GetUserId(), take);
+    }
+
     [HttpDelete("{groupId}")]
     public async Task<IActionResult> DeleteGroupAsync([FromRoute] Guid groupId)
     {

@@ -10,6 +10,7 @@ public interface IGroupService
     Task<GroupResponse> UpdateGroupAsync(CreateGroupRequest request);
     Task<GroupResponse> GetGroupAsync(Guid id);
     Task<PageResponse<GroupResponse>> GetMyGroupsAsync(int skip, int take, Guid userId, string? query = "");
+    Task<List<GroupResponse>> GetRecentGroupsAsync(Guid userId, int take = 3);
     Task<GroupResponse> DeleteGroupAsync(Guid id);
     Task<GroupResponse> RestoreGroupAsync(Guid id);
     Task<BalanceResponse> GetGroupBalancesAsync(Guid groupId, Guid userId);

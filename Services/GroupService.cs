@@ -206,6 +206,89 @@ public class GroupService(
         return mappedResult;
     }
 
+    public async Task<List<GroupResponse>> GetRecentGroupsAsync(Guid userId, int take = 3)
+    {
+        var myMemberId =
+            await db
+                .Members.AsNoTracking()
+                .Where(m => m.UserId == userId && m.DeletedAt == null)
+                .Select(m => (Guid?)m.Id)
+                .FirstOrDefaultAsync()
+            ?? throw new NotFoundAppException("member_not_found", "Member not found!");
+
+        var groupsQuery = db
+            .Groups.AsNoTracking()
+            .Where(g =>
+                g.DeletedAt == null
+                && g.GroupMembers.Any(gm =>
+                    gm.MemberId == myMemberId
+                    && gm.LeftAt == null
+                    && gm.GroupMemberStatus != GroupMemberStatus.Deleted
+                )
+            );
+
+        var pagedGroups = await groupsQuery
+            .Select(g => new
+            {
+                g.Id,
+                g.Name,
+                g.SimplifyDebts,
+                g.CreatedAt,
+                g.ModifiedAt,
+                g.DeletedAt,
+                LastChange = g
+                    .Activities.Select(a => (DateTime?)a.CreatedAt)
+                    .OrderByDescending(x => x)
+                    .FirstOrDefault(),
+            })
+            .OrderByDescending(g => g.LastChange ?? g.ModifiedAt ?? g.CreatedAt)
+            .ThenByDescending(g => g.CreatedAt)
+            .Take(take)
+            .ToListAsync();
+
+        var groupIds = pagedGroups.Select(g => g.Id).ToList();
+
+        var paidByGroup = await db
+            .ExpensePayments.AsNoTracking()
+            .Where(p =>
+                p.PaidByMemberId == myMemberId
+                && p.Expense.DeletedAt == null
+                && groupIds.Contains(p.Expense.GroupId)
+            )
+            .GroupBy(p => p.Expense.GroupId)
+            .Select(g => new { GroupId = g.Key, Amount = g.Sum(x => x.Amount) })
+            .ToDictionaryAsync(x => x.GroupId, x => x.Amount);
+
+        var owedByGroup = await db
+            .ExpenseSplits.AsNoTracking()
+            .Where(s =>
+                s.OwedByMemberId == myMemberId
+                && s.Expense.DeletedAt == null
+                && groupIds.Contains(s.Expense.GroupId)
+            )
+            .GroupBy(s => s.Expense.GroupId)
+            .Select(g => new { GroupId = g.Key, Amount = g.Sum(x => x.Amount) })
+            .ToDictionaryAsync(x => x.GroupId, x => x.Amount);
+
+        return pagedGroups
+            .Select(g =>
+            {
+                paidByGroup.TryGetValue(g.Id, out var paid);
+                owedByGroup.TryGetValue(g.Id, out var owed);
+
+                return new GroupResponse
+                {
+                    Id = g.Id,
+                    Name = g.Name,
+                    SimplifyDebts = g.SimplifyDebts,
+                    CreatedAt = g.CreatedAt,
+                    DeletedAt = g.DeletedAt,
+                    NetBalance = paid - owed,
+                };
+            })
+            .ToList();
+    }
+
     public async Task<BalanceResponse> GetGroupBalancesAsync(Guid groupId, Guid userId)
     {
         var _ =

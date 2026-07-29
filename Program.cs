@@ -118,6 +118,13 @@ builder.Services.AddScoped<IActivityWriter, ActivityWriter>();
 
 var app = builder.Build();
 
+// Apply pending migrations so the schema exists before seeding.
+using (var scope = app.Services.CreateScope())
+{
+    var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+    await db.Database.MigrateAsync();
+}
+
 await DbSeeder.SeedUsersAsync(app.Services);
 
 // Configure the HTTP request pipeline.

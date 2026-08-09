@@ -96,7 +96,9 @@ public class BalanceService(
                         : BalanceSide.Settled
                 };
             })
-            .OrderByDescending(x => x.Net)
+            // current member first, then by net descending
+            .OrderByDescending(x => x.MemberId == myMember.Id)
+            .ThenByDescending(x => x.Net)
             .ToList();
 
         var totalPaidQuery = db.ExpensePayments

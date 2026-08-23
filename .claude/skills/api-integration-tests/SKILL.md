@@ -53,6 +53,11 @@ Pure refactors with no HTTP-visible change need no new tests, but the suite must
    - No assertions in Arrange. If setup must verify something, that check lives inside a helper in
      `Extensions.cs` (as `RegisterAsync` does), keeping the test body's Assert block the only place
      expectations appear.
+9. **Pass `TestContext.Current.CancellationToken`** to every call that accepts one - `GetAsync`,
+   `PostAsJsonAsync`, `ReadFromJsonAsync` and friends. Without it a cancelled or timed-out run keeps
+   waiting on live HTTP calls, and the xUnit analyzer flags it as
+   [xUnit1051](https://xunit.net/xunit.analyzers/rules/xUnit1051). Fixture lifetime methods
+   (`InitializeAsync`, `DisposeAsync`) are outside a test and do not take it.
 
 ### Invariants worth asserting everywhere
 
@@ -113,7 +118,8 @@ public sealed class ExpenseTests(ApiFixture fixture)
         };
 
         // Act
-        var response = await client.PostAsJsonAsync($"/api/Expense/{group.Id}", request);
+        var response = await client.PostAsJsonAsync(
+            $"/api/Expense/{group.Id}", request, TestContext.Current.CancellationToken);
 
         // Assert
         // Checks status, problem+json content type, the `code` and the presence of traceId.

@@ -12,6 +12,16 @@ namespace SimpleShare.IntegrationTests;
 /// </summary>
 public sealed class ApiFixture : WebApplicationFactory<Program>, IAsyncLifetime
 {
+    // Exposed so negative-path tests can mint a deliberately invalid token
+    // (expired, wrong issuer). Positive paths must still get their tokens from
+    // POST /api/Auth/register - see rule 6 in the skill.
+    public const string JwtIssuer = "https://test.local";
+    public const string JwtAudience = "https://test.local";
+
+    // HS256 needs >= 32 bytes of key material; the app throws at startup if
+    // this is shorter.
+    public const string JwtSigningKey = "integration-tests-signing-key-0123456789abcdef";
+
     // Same image and tag as production, so EF migrations, Npgsql behaviour and
     // `numeric` decimal semantics are the ones the deployment actually runs.
     private readonly PostgreSqlContainer _db = new PostgreSqlBuilder("postgres:16-alpine")
@@ -33,11 +43,9 @@ public sealed class ApiFixture : WebApplicationFactory<Program>, IAsyncLifetime
             new Dictionary<string, string?>
             {
                 ["ConnectionStrings:Default"] = _db.GetConnectionString(),
-                ["JWT:Issuer"] = "https://test.local",
-                ["JWT:Audience"] = "https://test.local",
-                // HS256 needs >= 32 bytes of key material; the app throws at
-                // startup if this is shorter.
-                ["JWT:SigningKey"] = "integration-tests-signing-key-0123456789abcdef",
+                ["JWT:Issuer"] = JwtIssuer,
+                ["JWT:Audience"] = JwtAudience,
+                ["JWT:SigningKey"] = JwtSigningKey,
             }));
 
         // The host is built lazily on the first CreateClient(), which is after

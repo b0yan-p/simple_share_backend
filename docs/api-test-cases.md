@@ -10,6 +10,9 @@ matching rows here change with it.
 Case IDs (`AUTH-03`, `EXP-11`, ...) are stable. Reference them in commits, PRs and test method names
 so a failing test maps back to a documented intent.
 
+**Status (2026-08-23):** P0 implemented - 34 tests, 31 passing, 3 failing by design. P1, P2 and P3
+not yet written.
+
 ---
 
 ## Conventions
@@ -63,29 +66,36 @@ empty cells are the backlog.
 | GET | `/api/Activity/me` | required | `ACT-01..03` |
 
 > **`GroupMemberController` carries no `[Authorize]` attribute.** All three of its routes answer
-> anonymously today. `AUTH-08` asserts the intended behaviour (401), so it fails until that is
-> fixed - which is the point.
+> anonymously today - confirmed by `AUTH-08`, which returns `404`, `403` and `415` instead of `401`.
+> One of them leaks member data. Measured behaviour is in
+> [cases expected to fail](#auth-08---confirmed-failing-3-of-20-routes).
 
 ---
 
 ## P0 - contract and auth
 
-The layer the mobile app cannot work without. Write these first.
+The layer the mobile app cannot work without. **Implemented** - 34 tests, 31 passing, 3 failing by
+design (2026-08-23). Status column: `pass` verified green, `FAILS` red on purpose, see
+[the section below](#cases-expected-to-fail-on-the-first-run).
 
-| ID | Case | Expected |
-|---|---|---|
-| `HLTH-01` | `GET /health` against an empty database | `200`. Proves migrations, the `Roles` `HasData` seed and startup seeding all survive a cold start |
-| `AUTH-01` | Register with a valid payload | `200`, body carries `Id`, `Email`, `FirstName`, `LastName` and a non-empty `Token` |
-| `AUTH-02` | Register with an email that already exists | `400` |
-| `AUTH-03` | Register with a password below policy (no digit / no uppercase / under 6 chars) | `400`, one case per rule |
-| `AUTH-04` | Register with `Password != RepeatPassword` | `400` |
-| `AUTH-05` | Login with correct credentials | `200` + token |
-| `AUTH-06` | Login with a wrong password | `401` |
-| `AUTH-07` | Login with an unknown email | `401`, **and a response body identical to `AUTH-06`** - no user enumeration |
-| `AUTH-08` | Table-driven: call every authenticated route with no `Authorization` header | `401` for all. Fails today on the three `GroupMember` routes |
-| `AUTH-09` | Call an authenticated route with a token whose signature was altered | `401` |
-| `AUTH-10` | Call an authenticated route with an expired token | `401`. `ClockSkew` is 2 minutes, so backdate well past it |
-| `AUTH-11` | The token issued by register is accepted by an authenticated route | `200`. Guards the issuer / audience / signing-key wiring |
+| ID | Case | Expected | Status |
+|---|---|---|---|
+| `HLTH-01` | `GET /health` against an empty database | `200`. Proves migrations, the `Roles` `HasData` seed and startup seeding all survive a cold start | pass |
+| `AUTH-01` | Register with a valid payload | `200`, body carries `Id`, `Email`, `FirstName`, `LastName` and a non-empty `Token` | pass |
+| `AUTH-02` | Register with an email that already exists | `400` | pass |
+| `AUTH-03` | Register with a password below policy (no digit / no uppercase / under 6 chars) | `400`, one case per rule | pass (4 cases) |
+| `AUTH-04` | Register with `Password != RepeatPassword` | `400` | pass |
+| `AUTH-05` | Login with correct credentials | `200` + token | pass |
+| `AUTH-06` | Login with a wrong password | `401` | pass |
+| `AUTH-07` | Login with an unknown email | `401`, **and a response body identical to `AUTH-06`** - no user enumeration | pass |
+| `AUTH-08` | Table-driven: call every authenticated route with no `Authorization` header | `401` for all | **FAILS** on 3 of 20 routes |
+| `AUTH-09` | Call an authenticated route with a token whose signature was altered | `401` | pass |
+| `AUTH-10` | Call an authenticated route with an expired token | `401`. `ClockSkew` is 2 minutes, so backdate well past it | pass |
+| `AUTH-11` | The token issued by register is accepted by an authenticated route | `200`. Guards the issuer / audience / signing-key wiring | pass |
+
+Lives in `AuthTests.cs`, `HealthTests.cs` and `AuthorizationMatrixTests.cs`. `AUTH-10` is the one
+sanctioned place a token is minted rather than obtained from `/api/Auth/register`: `TokenService`
+issues 7-day tokens, so expiry cannot be reached any other way.
 
 ---
 
@@ -171,13 +181,34 @@ with a valid account can read someone else's data.
 
 ## Cases expected to fail on the first run
 
-Not defects in the tests. Write them to assert the *intended* behaviour and let them fail loudly.
+Not defects in the tests. They assert the *intended* behaviour and fail loudly until the API has it.
+Do not `Skip` or delete them to get a green run.
+
+### `AUTH-08` - confirmed failing, 3 of 20 routes
+
+`GroupMemberController` carries no `[Authorize]` attribute. Measured, not predicted - each route
+refuses for a different accidental reason, and none of them checks identity:
+
+| Route | Expected | Actual | Why |
+|---|---|---|---|
+| `GET /api/GroupMember/{groupId}/members` | `401` | `404` | Reached the handler and queried the database. `404` only because the group ID does not exist - **with a real group ID this returns member names, user IDs, roles and join dates to an anonymous caller over the public tunnel** |
+| `DELETE /api/GroupMember/{groupId}/members/{memberId}` | `401` | `403` | Handler ran, `User.FindFirstValue` found no claim, fell through to its own `Forbid()`. Refuses, but by accident |
+| `POST /api/GroupMember/{groupId}/members/bulk` | `401` | `415` | Rejected at content-type negotiation before authorization was considered at all. The matrix sends no body; a real JSON body would get past this into `User.GetUserId()`, which throws `UnauthorizedAccessException` and surfaces as `500` |
+
+The first row is a live data leak. Adding `[Authorize]` to the controller should turn all three into
+clean `401`s with no change to the tests.
+
+### Still expected to fail, not yet written
 
 | ID | Why |
 |---|---|
-| `AUTH-08` | `GroupMemberController` has no `[Authorize]`, so all three routes answer anonymously today. The bulk-add route additionally throws `UnauthorizedAccessException` out of `User.GetUserId()`, which surfaces as `500` rather than `401` |
 | `BAL-03` | Multi-payer allocation divides, then applies `Math.Round(..., 2, MidpointRounding.AwayFromZero)` per pair. Rounding after a proportional split is where a cent typically appears or vanishes |
-| `HLTH-01` | Passes only if startup seeding is safe on an empty database. It currently seeds two fixed accounts with a known password in **every** environment, production included - see [api-testing.md](https://github.com/NikolaCokic/simpleshare-deployment/blob/main/docs/api-testing.md#findings-worth-fixing-before-tests-land) |
+
+### Resolved
+
+| ID | Outcome |
+|---|---|
+| `HLTH-01` | **Passes.** Startup seeding is safe on an empty database - migrations, the `Roles` `HasData` seed and `DbSeeder` all complete on a fresh container. That the seeder runs at all outside Development remains a finding, but it does not break the cold start - see [api-testing.md](https://github.com/NikolaCokic/simpleshare-deployment/blob/main/docs/api-testing.md#findings-worth-fixing-before-tests-land) |
 
 ---
 

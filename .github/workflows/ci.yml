@@ -1,0 +1,59 @@
+name: ci
+
+# Tests only - this workflow never builds or pushes an image. Publishing lives
+# in publish.yml, which has no pull_request trigger, so a PR cannot ship.
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# Deliberately no paths-ignore. A job skipped by a path filter reports no status
+# at all, so once `test` becomes a required check it would leave doc-only PRs
+# waiting forever on a check that never arrives. The run costs about a minute.
+
+permissions:
+  contents: read
+  checks: write     # lets the test reporter publish its check run
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json   # respects the pinned SDK 10.0.100
+
+      # Docker is preinstalled on ubuntu-latest, so Testcontainers needs no setup.
+      # The first run that touches ApiFixture pulls postgres:16-alpine (~80 MB).
+      - name: Test
+        run: >
+          dotnet test --configuration Release
+          --logger "trx;LogFileName=results.trx"
+          --results-directory ./TestResults
+
+      # Renders pass/fail per test in the Checks tab and on the PR, so nobody has
+      # to download a .trx. fail-on-error keeps the reporter itself from turning
+      # the job red when it has nothing to publish.
+      - name: Report
+        if: always()
+        uses: dorny/test-reporter@v1
+        with:
+          name: integration tests
+          path: TestResults/*.trx
+          reporter: dotnet-trx
+          fail-on-error: false
+
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: ./TestResults

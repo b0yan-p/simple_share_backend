@@ -4,11 +4,18 @@ on:
   push:
     branches: [main]
     tags: ['v*']
+    # Skips only when EVERY changed file matches. A commit carrying code plus its
+    # tests still publishes; a tests-only or docs-only commit does not.
+    # tests/ is excluded from the image by .dockerignore, so building one would
+    # produce identical content under a new digest - which Watchtower would then
+    # pull, restarting production to no effect.
     paths-ignore:
       - '**.md'
       - '.gitignore'
       - '.vscode/**'
       - 'LICENSE'
+      - 'tests/**'
+      - '.claude/**'
 
 env:
   IMAGE: ghcr.io/${{ github.repository }}

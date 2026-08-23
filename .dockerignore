@@ -22,3 +22,6 @@ Dockerfile
 .dockerignore
 README.md
 **/*.http
+
+# Test project - never built inside the image
+tests

@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using simpleShare_backend.Common.Extensions;
 using simpleShare_backend.Contracts.Member;
@@ -6,6 +7,7 @@ using simpleShare_backend.Services;
 
 namespace simpleShare_backend.Controllers;
 
+[Authorize]
 [ApiController]
 [Route("api/[controller]/{groupId}")]
 public class GroupMemberController(

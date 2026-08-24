@@ -5,7 +5,7 @@ name: ci
 on:
   pull_request:
   push:
-    branches: [main]
+    branches: [main, development]
 
 # Deliberately no paths-ignore. A job skipped by a path filter reports no status
 # at all, so once `test` becomes a required check it would leave doc-only PRs

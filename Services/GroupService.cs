@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using simpleShare_backend.Common;
 using simpleShare_backend.Common.Exceptions;
 using simpleShare_backend.Common.Extensions;
+using simpleShare_backend.Common.Security;
 using simpleShare_backend.Contracts.Balances;
 using simpleShare_backend.Contracts.Group;
 using simpleShare_backend.Data;
@@ -56,6 +57,23 @@ public class GroupService(
         };
 
         await repo.CreateWithCompositeId<GroupMember>(groupMember);
+
+        // Every group carries a share link from birth, in the same save as the
+        // group itself. Minting it here rather than on first read keeps the
+        // fetch endpoint a plain read, and makes CreatedByUserId mean what it
+        // says. Done inline on purpose: IGroupInvitationService depends on
+        // IGroupService, so delegating would close a DI cycle.
+        GroupInvitation invitation = new()
+        {
+            Id = Guid.NewGuid(),
+            GroupId = newGroup.Id,
+            Token = InviteTokenGenerator.Generate(),
+            CreatedByUserId = userId,
+            CreatedAtUtc = DateTime.UtcNow,
+            IsActive = true,
+        };
+
+        db.GroupInvitations.Add(invitation);
 
         await repo.SaveChangesAsync();
 

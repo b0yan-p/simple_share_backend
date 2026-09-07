@@ -185,7 +185,7 @@ namespace simpleShare_backend.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("Groups");
+                    b.ToTable("Groups", (string)null);
                 });
 
             modelBuilder.Entity("simpleShare_backend.Models.Domain.Activity", b =>
@@ -230,7 +230,7 @@ namespace simpleShare_backend.Migrations
 
                     b.HasIndex("GroupId", "CreatedAt", "Id");
 
-                    b.ToTable("Activities");
+                    b.ToTable("Activities", (string)null);
                 });
 
             modelBuilder.Entity("simpleShare_backend.Models.Domain.Expense", b =>
@@ -285,7 +285,7 @@ namespace simpleShare_backend.Migrations
 
                     b.HasIndex("GroupId", "ExpenseDate");
 
-                    b.ToTable("Expenses");
+                    b.ToTable("Expenses", (string)null);
                 });
 
             modelBuilder.Entity("simpleShare_backend.Models.Domain.ExpensePayment", b =>
@@ -309,7 +309,7 @@ namespace simpleShare_backend.Migrations
 
                     b.HasIndex("PaidByMemberId", "ExpenseId");
 
-                    b.ToTable("ExpensePayments");
+                    b.ToTable("ExpensePayments", (string)null);
                 });
 
             modelBuilder.Entity("simpleShare_backend.Models.Domain.ExpenseSplit", b =>
@@ -331,7 +331,51 @@ namespace simpleShare_backend.Migrations
 
                     b.HasIndex("OwedByMemberId");
 
-                    b.ToTable("ExpenseSplits");
+                    b.ToTable("ExpenseSplits", (string)null);
+                });
+
+            modelBuilder.Entity("simpleShare_backend.Models.Domain.GroupInvitation", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("CreatedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("ExpiresAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("GroupId")
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTime?>("RevokedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Token")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<int>("UseCount")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("GroupId")
+                        .IsUnique()
+                        .HasFilter("\"IsActive\"");
+
+                    b.HasIndex("Token")
+                        .IsUnique();
+
+                    b.ToTable("GroupInvitations", (string)null);
                 });
 
             modelBuilder.Entity("simpleShare_backend.Models.Domain.GroupMember", b =>
@@ -361,7 +405,7 @@ namespace simpleShare_backend.Migrations
                     b.HasIndex("GroupId", "MemberId")
                         .HasFilter("\"LeftAt\" IS NULL AND \"GroupMemberStatus\" <> 0");
 
-                    b.ToTable("GroupMembers");
+                    b.ToTable("GroupMembers", (string)null);
                 });
 
             modelBuilder.Entity("simpleShare_backend.Models.Domain.Member", b =>
@@ -411,7 +455,7 @@ namespace simpleShare_backend.Migrations
                         .IsUnique()
                         .HasFilter("\"UserId\" IS NOT NULL");
 
-                    b.ToTable("Members");
+                    b.ToTable("Members", (string)null);
                 });
 
             modelBuilder.Entity("simpleShare_backend.Models.Domain.OutboxMessage", b =>
@@ -450,7 +494,7 @@ namespace simpleShare_backend.Migrations
 
                     b.HasIndex("ProcessedAt", "CreatedAt", "Id");
 
-                    b.ToTable("OutboxMessages");
+                    b.ToTable("OutboxMessages", (string)null);
                 });
 
             modelBuilder.Entity("simpleShare_backend.Models.Domain.UserConnection", b =>
@@ -468,7 +512,7 @@ namespace simpleShare_backend.Migrations
 
                     b.HasIndex("UserBId");
 
-                    b.ToTable("UserConnections", t =>
+                    b.ToTable("UserConnections", null, t =>
                         {
                             t.HasCheckConstraint("CK_UserConnection_NotSelf", "\"UserAId\" <> \"UserBId\"");
 
@@ -682,6 +726,17 @@ namespace simpleShare_backend.Migrations
                     b.Navigation("OwedByMember");
                 });
 
+            modelBuilder.Entity("simpleShare_backend.Models.Domain.GroupInvitation", b =>
+                {
+                    b.HasOne("simpleShare_backend.Domain.Group", "Group")
+                        .WithMany("Invitations")
+                        .HasForeignKey("GroupId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Group");
+                });
+
             modelBuilder.Entity("simpleShare_backend.Models.Domain.GroupMember", b =>
                 {
                     b.HasOne("simpleShare_backend.Domain.Group", "Group")
@@ -736,6 +791,8 @@ namespace simpleShare_backend.Migrations
                     b.Navigation("Expenses");
 
                     b.Navigation("GroupMembers");
+
+                    b.Navigation("Invitations");
                 });
 
             modelBuilder.Entity("simpleShare_backend.Models.Domain.Expense", b =>

@@ -10,7 +10,7 @@ matching rows here change with it.
 Case IDs (`AUTH-03`, `EXP-11`, ...) are stable. Reference them in commits, PRs and test method names
 so a failing test maps back to a documented intent.
 
-**Status (2026-08-24):** P0 and P1 implemented - 74 tests, all passing. P2 and P3 not yet written.
+**Status (2026-09-07):** P0 and P1 implemented - 89 tests, all passing. P2 and P3 not yet written.
 
 ---
 
@@ -41,6 +41,9 @@ empty cells are the backlog.
 | Method | Route | Auth | Cases |
 |---|---|---|---|
 | GET | `/health` | anonymous | `HLTH-01` |
+| GET | `/.well-known/assetlinks.json` | anonymous | `LNK-01` |
+| GET | `/.well-known/apple-app-site-association` | anonymous | `LNK-02` |
+| GET | `/join/{token}` | anonymous | `LNK-03..05` |
 | POST | `/api/Auth/register` | anonymous | `AUTH-01..04` |
 | POST | `/api/Auth/login` | anonymous | `AUTH-05..07` |
 | POST | `/api/Group` | required | `GRP-01`, `GRP-09` |
@@ -61,13 +64,21 @@ empty cells are the backlog.
 | PUT | `/api/Expense/{groupId}` | required | `EXP-13` |
 | DELETE | `/api/Expense/{groupId}/{expenseId}` | required | `EXP-14`, `XT-01` |
 | POST | `/api/Expense/{groupId}/settleUp` | required | `SET-01..05` |
+| GET | `/api/GroupInvitation/group/{groupId}` | required | `AUTH-08`, `INV-01`, `INV-02`, `INV-08` |
+| GET | `/api/GroupInvitation/{token}` | **anonymous** | `INV-03`, `INV-04` |
+| POST | `/api/GroupInvitation/{token}/join` | required | `AUTH-08`, `INV-05..07` |
 | GET | `/api/UserConnection` | required | `CON-01` |
 | GET | `/api/Activity/me` | required | `ACT-01..03` |
 
 > **`GroupMemberController` is authorized again.** Its three routes used to answer anonymously - one
 > of them leaking member names, user ids, roles and join dates over the public tunnel. `a0f55d8`
-> added the `[Authorize]` attribute and `AUTH-08` now passes on all 20 routes, with no change to the
+> added the `[Authorize]` attribute and `AUTH-08` now passes on all 22 routes, with no change to the
 > test.
+>
+> **The invite preview route is anonymous on purpose.** `GET /api/GroupInvitation/{token}` is the one
+> authenticated-adjacent route deliberately left out of `AUTH-08`: someone opening an invite link
+> usually has no account yet and has to see which group they are joining before signing up. It
+> returns only the group name and member count - never member names, ids or balances.
 
 ---
 
@@ -87,7 +98,7 @@ The layer the mobile app cannot work without. **Implemented** - 34 tests, all pa
 | `AUTH-05` | Login with correct credentials | `200` + token | pass |
 | `AUTH-06` | Login with a wrong password | `401` | pass |
 | `AUTH-07` | Login with an unknown email | `401`, **and a response body identical to `AUTH-06`** - no user enumeration | pass |
-| `AUTH-08` | Table-driven: call every authenticated route with no `Authorization` header | `401` for all | pass (20 routes) |
+| `AUTH-08` | Table-driven: call every authenticated route with no `Authorization` header | `401` for all | pass (22 routes) |
 | `AUTH-09` | Call an authenticated route with a token whose signature was altered | `401` | pass |
 | `AUTH-10` | Call an authenticated route with an expired token | `401`. `ClockSkew` is 2 minutes, so backdate well past it | pass |
 | `AUTH-11` | The token issued by register is accepted by an authenticated route | `200`. Guards the issuer / audience / signing-key wiring | pass |
@@ -119,6 +130,19 @@ them. **Implemented** - 40 tests, all passing (2026-08-24).
 | `MEM-03` | `members/bulk` with `InviteUser = true` and no `Email` | `200`, no member created, one entry in `ErrorMessages` - pinned, [see below](#mem-03---pinned-to-current-behaviour) | pass |
 | `MEM-04` | A non-owner tries to remove a member | `403`, `code = not_authorized` | pass |
 | `MEM-05` | A removed member moves to `Deleted` and stops appearing in active lists | list reflects removal | pass |
+| `INV-01` | `POST /api/Group` then `GET group/{groupId}` | a group is born with its link: token is 22 base64url chars, active, `UseCount = 0`, and a second read returns the same row rather than minting another | pass |
+| `INV-02` | `GET group/{groupId}` by a non-member | `403`, `code = not_authorized` | pass |
+| `INV-03` | `GET {token}` with **no** `Authorization` header | `200` with group name and member count | pass |
+| `INV-04` | `GET {token}` with an unknown token | `404`, `code = invite_not_found` - same answer a revoked or expired token gets, so a stranger cannot tell real tokens apart | pass |
+| `INV-05` | `POST {token}/join` by a new user | `200`, member is `Active` in the group, `UseCount` becomes 1 | pass |
+| `INV-06` | `POST {token}/join` by someone already in the group | `200` with `AlreadyMember = true`, no duplicate row, `UseCount` unchanged | pass |
+| `INV-07` | `POST {token}/join` after that member was removed | rejoins on the **same** `MemberId`, so expense history stays attached | pass |
+| `INV-08` | `GET group/{groupId}` for another tenant's group | `403`/`404`, and the token never appears in the body | pass |
+| `LNK-01` | `GET /.well-known/assetlinks.json` anonymously | `200`, `application/json`, carries the package name and fingerprints - Google's fetcher rejects any other content type | pass |
+| `LNK-02` | `GET /.well-known/apple-app-site-association` anonymously | `200`, `application/json`, `applinks` scoped to `/join/*` | pass |
+| `LNK-03` | `GET /join/{token}` with a valid token, no auth | `200`, `text/html`, shows the group name and member count | pass |
+| `LNK-04` | `GET /join/{token}` with an unknown token | `200` HTML explaining the invite is dead, **not** a `404` | pass |
+| `LNK-05` | `GET /join/{token}` where the group name contains markup | name is HTML-encoded - the only page putting user input into markup | pass |
 | `EXP-01` | Create expense - single payer, explicit splits, happy path | `200`, `PaidBy` and `SplittedBy` match the request | pass |
 | `EXP-02` | Create expense with empty `Payments` | `400`, `code = payments_required` | pass |
 | `EXP-03` | Payment amount `<= 0` | `400`, `code = payment_amount_invalid` | pass |
@@ -145,8 +169,8 @@ them. **Implemented** - 40 tests, all passing (2026-08-24).
 | `SET-04` | Settle up to a member outside the group | `403`, `code = member_not_in_group` | pass |
 | `SET-05` | Settle-up appears in `GET /api/Expense/{groupId}` with `IsSettleUp = true` | flag set | pass |
 
-Lives in `GroupTests.cs`, `GroupMemberTests.cs`, `ExpenseTests.cs` (`EXP-*` and `SET-*`) and
-`BalanceTests.cs`.
+Lives in `GroupTests.cs`, `GroupMemberTests.cs`, `GroupInvitationTests.cs`, `AppLinkTests.cs`,
+`ExpenseTests.cs` (`EXP-*` and `SET-*`) and `BalanceTests.cs`.
 
 Two notes on how these are set up, because both cost time to work out:
 

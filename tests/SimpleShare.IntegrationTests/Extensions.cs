@@ -8,6 +8,7 @@ using simpleShare_backend.Contracts.Auth;
 using simpleShare_backend.Contracts.Balances;
 using simpleShare_backend.Contracts.Expenses;
 using simpleShare_backend.Contracts.Group;
+using simpleShare_backend.Contracts.Invitation;
 using simpleShare_backend.Contracts.Member;
 using simpleShare_backend.Models.Application;
 
@@ -177,6 +178,38 @@ public static class ApiExtensions
         var response = await client.GetAsync($"/api/GroupMember/{groupId}/members", ct);
         return await response.ReadOkAsync<List<GroupMemberResponse>>(ct);
     }
+
+    /// <summary>Owner-only: soft-removes a member, setting LeftAt.</summary>
+    public static async Task<HttpResponseMessage> RemoveMemberAsync(
+        this HttpClient client, Guid groupId, Guid memberId, CancellationToken ct) =>
+        await client.DeleteAsync($"/api/GroupMember/{groupId}/members/{memberId}", ct);
+
+    // ---------------------------------------------------------- invitations
+
+    /// <summary>The group's active invite link, minted on first ask.</summary>
+    public static async Task<GroupInvitationResponse> GetInvitationAsync(
+        this HttpClient client, Guid groupId, CancellationToken ct)
+    {
+        var response = await client.GetAsync($"/api/GroupInvitation/group/{groupId}", ct);
+        return await response.ReadOkAsync<GroupInvitationResponse>(ct);
+    }
+
+    /// <summary>Raw so tests can drive it anonymously and assert problem bodies.</summary>
+    public static async Task<HttpResponseMessage> GetInvitePreviewAsync(
+        this HttpClient client, string token, CancellationToken ct) =>
+        await client.GetAsync($"/api/GroupInvitation/{token}", ct);
+
+    public static async Task<HttpResponseMessage> JoinByTokenAsync(
+        this HttpClient client, string token, CancellationToken ct) =>
+        await client.PostAsync($"/api/GroupInvitation/{token}/join", content: null, ct);
+
+    public static async Task<InvitePreviewResponse> ReadPreviewAsync(
+        this HttpResponseMessage response, CancellationToken ct) =>
+        await response.ReadOkAsync<InvitePreviewResponse>(ct);
+
+    public static async Task<JoinGroupResponse> ReadJoinAsync(
+        this HttpResponseMessage response, CancellationToken ct) =>
+        await response.ReadOkAsync<JoinGroupResponse>(ct);
 
     // ------------------------------------------------------------ expenses
 

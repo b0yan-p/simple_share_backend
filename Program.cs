@@ -1,8 +1,10 @@
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
+using simpleShare_backend.Common.Endpoints;
 using simpleShare_backend.Common.Exceptions;
 using simpleShare_backend.Data;
 using simpleShare_backend.Infrastructure;
@@ -18,35 +20,36 @@ builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
 
 builder.Services.AddHealthChecks();
 
-builder.Services
-    .AddOpenApi()
+builder
+    .Services.AddOpenApi()
     .AddEndpointsApiExplorer()
     .AddSwaggerGen()
     .AddDbContext<ApplicationDbContext>(options =>
-        {
-            options.UseNpgsql(builder.Configuration.GetConnectionString("Default"));
-        })
+    {
+        options.UseNpgsql(builder.Configuration.GetConnectionString("Default"));
+    })
     .AddIdentity<User, IdentityRole<Guid>>(options =>
-        {
-            options.Password.RequireDigit = true;
-            options.Password.RequireLowercase = true;
-            options.Password.RequireUppercase = true;
-            options.Password.RequiredLength = 6;
-            options.Password.RequireNonAlphanumeric = false;
-        })
+    {
+        options.Password.RequireDigit = true;
+        options.Password.RequireLowercase = true;
+        options.Password.RequireUppercase = true;
+        options.Password.RequiredLength = 6;
+        options.Password.RequireNonAlphanumeric = false;
+    })
     .AddEntityFrameworkStores<ApplicationDbContext>();
 
-builder.Services.AddAuthentication(options =>
+builder
+    .Services.AddAuthentication(options =>
     {
         options.DefaultAuthenticateScheme =
-        options.DefaultChallengeScheme =
-        options.DefaultForbidScheme =
-        options.DefaultScheme =
-        options.DefaultSignInScheme =
-        options.DefaultSignOutScheme = JwtBearerDefaults.AuthenticationScheme;
-    }
-)
-.AddJwtBearer(options =>
+            options.DefaultChallengeScheme =
+            options.DefaultForbidScheme =
+            options.DefaultScheme =
+            options.DefaultSignInScheme =
+            options.DefaultSignOutScheme =
+                JwtBearerDefaults.AuthenticationScheme;
+    })
+    .AddJwtBearer(options =>
     {
         options.TokenValidationParameters = new TokenValidationParameters
         {
@@ -59,12 +62,12 @@ builder.Services.AddAuthentication(options =>
             ClockSkew = TimeSpan.FromMinutes(2),
             IssuerSigningKey = new SymmetricSecurityKey(
                 System.Text.Encoding.UTF8.GetBytes(builder.Configuration["JWT:SigningKey"]!)
-            )
+            ),
         };
-    }
-);
+    });
 
-builder.Services.AddControllers()
+builder
+    .Services.AddControllers()
     .ConfigureApiBehaviorOptions(options =>
     {
         options.InvalidModelStateResponseFactory = context =>
@@ -74,27 +77,26 @@ builder.Services.AddControllers()
                 Status = StatusCodes.Status400BadRequest,
                 Title = "Validation failed",
                 Detail = "Invalid request body",
-                Type = "https://httpstatuses.com/400"
+                Type = "https://httpstatuses.com/400",
             };
             pd.Extensions["code"] = "validation_error";
             pd.Extensions["traceId"] = context.HttpContext.TraceIdentifier;
 
-            return new BadRequestObjectResult(pd)
-            {
-                ContentTypes = { "application/problem+json" }
-            };
+            return new BadRequestObjectResult(pd) { ContentTypes = { "application/problem+json" } };
         };
-    }); ;
+    });
+;
 builder.Services.AddAuthorization();
 
 builder.Services.AddCors(options =>
 {
-    options.AddPolicy("AllowAll", policy =>
-    {
-        policy.AllowAnyOrigin()
-              .AllowAnyMethod()
-              .AllowAnyHeader();
-    });
+    options.AddPolicy(
+        "AllowAll",
+        policy =>
+        {
+            policy.AllowAnyOrigin().AllowAnyMethod().AllowAnyHeader();
+        }
+    );
 });
 
 #region Services scope
@@ -109,6 +111,7 @@ builder.Services.AddScoped<IGroupService, GroupService>();
 builder.Services.AddScoped<IGroupMemberService, GroupMemberService>();
 builder.Services.AddScoped<IUserConnectionService, UserConnectionService>();
 builder.Services.AddScoped<IGroupMemberManagementService, GroupMemberManagementService>();
+builder.Services.AddScoped<IGroupInvitationService, GroupInvitationService>();
 builder.Services.AddScoped<IExpenseService, ExpenseService>();
 builder.Services.AddScoped<IBalanceService, BalanceService>();
 builder.Services.AddScoped<IActivityService, ActivityService>();
@@ -134,10 +137,26 @@ if (app.Environment.IsDevelopment())
     // TODO add swagger here
     app.UseSwagger();
     app.UseSwaggerUI();
-
 }
 
 app.UseCors("AllowAll");
+
+// Cloudflare sits in front and terminates TLS, so the origin sees plain HTTP.
+// Without this, Request.IsHttps and every generated URL are wrong.
+//
+// KnownNetworks/KnownProxies have to be cleared: by default the middleware only
+// trusts forwarded headers coming from loopback, so behind an external proxy it
+// silently does nothing. The trade-off is that anything able to reach the origin
+// directly can spoof these headers — acceptable here because they only affect
+// the reported scheme and client IP, neither of which gates access.
+var forwardedHeaders = new ForwardedHeadersOptions
+{
+    ForwardedHeaders = ForwardedHeaders.XForwardedProto | ForwardedHeaders.XForwardedFor,
+};
+forwardedHeaders.KnownNetworks.Clear();
+forwardedHeaders.KnownProxies.Clear();
+
+app.UseForwardedHeaders(forwardedHeaders);
 
 app.UseHttpsRedirection();
 
@@ -147,6 +166,8 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapHealthChecks("/health").AllowAnonymous();
+
+app.MapAppLinkEndpoints();
 
 app.MapControllers();
 

@@ -20,6 +20,7 @@ public class ApplicationDbContext(DbContextOptions dbContextOptions)
     public DbSet<UserConnection> UserConnections { get; set; }
     public DbSet<Activity> Activities { get; set; }
     public DbSet<OutboxMessage> OutboxMessages { get; set; }
+    public DbSet<GroupInvitation> GroupInvitations { get; set; }
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -218,6 +219,27 @@ public class ApplicationDbContext(DbContextOptions dbContextOptions)
                 .HasColumnType("text");
 
             b.HasIndex(x => new { x.ProcessedAt, x.CreatedAt, x.Id });
+        });
+        #endregion
+
+        #region GroupInvitation
+        builder.Entity<GroupInvitation>(b =>
+        {
+            b.HasKey(x => x.Id);
+
+            b.Property(x => x.Token).IsRequired().HasMaxLength(64);
+
+            b.HasOne(x => x.Group)
+                .WithMany(g => g.Invitations)
+                .HasForeignKey(x => x.GroupId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            // Lookups always come in by token, so it carries the unique index.
+            b.HasIndex(x => x.Token).IsUnique();
+
+            // At most one live link per group: get-or-create leans on this, and
+            // without it two concurrent first visits would mint two tokens.
+            b.HasIndex(x => x.GroupId).IsUnique().HasFilter("\"IsActive\"");
         });
         #endregion
 

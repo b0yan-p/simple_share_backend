@@ -14,4 +14,5 @@ public class Group : BaseModel<Guid>, IDeletable, ICreatable, IModifiable
     public ICollection<GroupMember> GroupMembers { get; } = [];
     public ICollection<Expense> Expenses { get; } = [];
     public ICollection<Activity> Activities { get; } = [];
+    public ICollection<GroupInvitation> Invitations { get; } = [];
 }

@@ -38,6 +38,11 @@ public sealed class AuthorizationMatrixTests(ApiFixture fixture)
         { "DELETE", $"/api/Expense/{AnyId}/{AnyId}" },
         { "POST",   $"/api/Expense/{AnyId}/settleUp" },
 
+        // The preview route is deliberately absent: it is public, so an invited
+        // person can see which group they are joining before they have an account.
+        { "GET",    $"/api/GroupInvitation/group/{AnyId}" },
+        { "POST",   "/api/GroupInvitation/sometoken/join" },
+
         { "GET",    "/api/UserConnection" },
         { "GET",    "/api/Activity/me" },
     };

@@ -30,7 +30,7 @@ public class BalanceService(
         var activeMembers = await db.GroupMembers
             .AsNoTracking()
             .Where(
-                x => x.GroupId == groupId
+                x => x.LeftAt == null && x.GroupId == groupId
             )
             .Select(x => new
             {

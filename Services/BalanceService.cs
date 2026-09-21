@@ -147,6 +147,7 @@ public class BalanceService(
             })
             .Select(g => new DebtRow
             {
+                GroupId = groupId,
                 DebtorId = g.Key.DebtorId,
                 CreditorId = g.Key.CreditorId,
                 Amount = g.Sum(x => x.s.Amount * x.p.Amount / x.TotalPaid)
@@ -187,6 +188,118 @@ public class BalanceService(
             Members = members,
             Debts = debtsNet
         };
+    }
+
+    public async Task<OverallBalance> GetMyOverallBalanceAsync(
+        Guid userId,
+        CancellationToken ct = default
+    )
+    {
+        // No member row yet means the user has never been in a group - registering alone does not
+        // create one. That is a zero balance, not a 404: the home screen asks for this on every
+        // entry and a brand new account must not be met with an error.
+        var myMember = await memberService.GetMemberByUserIdAsync(userId);
+
+        if (myMember is null)
+            return new OverallBalance();
+
+        var groupIds = await db.GroupMembers
+            .AsNoTracking()
+            .Where(gm =>
+                gm.MemberId == myMember.Id
+                && gm.LeftAt == null
+                && gm.GroupMemberStatus != GroupMemberStatus.Deleted
+                && gm.Group.DeletedAt == null
+            )
+            .Select(gm => gm.GroupId)
+            .ToListAsync(ct);
+
+        if (groupIds.Count == 0)
+            return new OverallBalance();
+
+        var splits = db.ExpenseSplits
+            .AsNoTracking()
+            .Where(s =>
+                s.Expense.DeletedAt == null
+                && groupIds.Contains(s.Expense.GroupId)
+            );
+
+        var payments = db.ExpensePayments
+            .AsNoTracking()
+            .Where(p =>
+                p.Expense.DeletedAt == null
+                && groupIds.Contains(p.Expense.GroupId)
+            );
+
+        var totalPaidQuery = payments
+            .GroupBy(p => p.ExpenseId)
+            .Select(g => new
+            {
+                ExpenseId = g.Key,
+                TotalPaid = g.Sum(x => x.Amount)
+            })
+            .Where(x => x.TotalPaid > 0);
+
+        // Same pro-rata edge shape as GetGroupBalancesAsync, but across every group at once
+        // and narrowed to the edges I am part of - the others cannot move my own totals.
+        var debtRows = await splits
+            .Join(
+                payments,
+                s => s.ExpenseId,
+                p => p.ExpenseId,
+                (s, p) => new { s, p }
+            )
+            .Join(
+                totalPaidQuery,
+                sp => sp.p.ExpenseId,
+                t => t.ExpenseId,
+                (sp, t) => new { sp.s, sp.p, t.TotalPaid }
+            )
+            .Where(x => x.s.OwedByMemberId != x.p.PaidByMemberId)
+            .Where(x =>
+                x.s.OwedByMemberId == myMember.Id
+                || x.p.PaidByMemberId == myMember.Id
+            )
+            .GroupBy(x => new
+            {
+                x.s.Expense.GroupId,
+                DebtorId = x.s.OwedByMemberId,
+                CreditorId = x.p.PaidByMemberId
+            })
+            .Select(g => new DebtRow
+            {
+                GroupId = g.Key.GroupId,
+                DebtorId = g.Key.DebtorId,
+                CreditorId = g.Key.CreditorId,
+                Amount = g.Sum(x => x.s.Amount * x.p.Amount / x.TotalPaid)
+            })
+            .ToListAsync(ct);
+
+        var balance = new OverallBalance();
+
+        // Netting is per group, and the groups are then summed - debts are never netted across
+        // group boundaries. Going through BuildNetByPair/BuildNetDebts keeps the pair
+        // normalization, the 0.01 threshold and the rounding identical to the group-scoped
+        // endpoints, so /Balance/me can never disagree with /Group/{id}/overview.
+        var noNames = new Dictionary<Guid, string>();
+
+        foreach (var group in debtRows.GroupBy(r => r.GroupId))
+        {
+            var edges = BuildNetDebts(BuildNetByPair([.. group]), noNames);
+
+            foreach (var edge in edges)
+            {
+                if (edge.CreditorMemberId == myMember.Id)
+                    balance.OwedToMeTotal += edge.Amount;
+                else
+                    balance.IOweTotal += edge.Amount;
+            }
+
+            if (edges.Count > 0)
+                balance.GroupCount++;
+        }
+
+        return balance;
     }
 
     public async Task<(decimal paid, decimal owed, decimal net)>
@@ -299,6 +412,7 @@ public class BalanceService(
 
     private sealed class DebtRow
     {
+        public Guid GroupId { get; set; }
         public Guid DebtorId { get; set; }
         public Guid CreditorId { get; set; }
         public decimal Amount { get; set; }

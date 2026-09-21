@@ -45,6 +45,7 @@ public sealed class AuthorizationMatrixTests(ApiFixture fixture)
 
         { "GET",    "/api/UserConnection" },
         { "GET",    "/api/Activity/me" },
+        { "GET",    "/api/Balance/me" },
     };
 
     [Theory] // AUTH-08

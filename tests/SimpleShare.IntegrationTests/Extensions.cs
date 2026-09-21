@@ -299,6 +299,16 @@ public static class ApiExtensions
         return await response.ReadOkAsync<BalanceResponse>(ct);
     }
 
+    /// <summary>The caller's standing across every group they belong to.</summary>
+    public static async Task<OverallBalanceResponse> GetMyBalanceAsync(
+        this HttpClient client,
+        CancellationToken ct
+    )
+    {
+        var response = await client.GetAsync("/api/Balance/me", ct);
+        return await response.ReadOkAsync<OverallBalanceResponse>(ct);
+    }
+
     /// <summary>
     /// BAL-02, the invariant every balance-touching test ends on: what the group
     /// paid and what it owes are the same money, so the members' nets must cancel

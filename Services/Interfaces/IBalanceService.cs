@@ -10,6 +10,11 @@ public interface IBalanceService
         CancellationToken ct = default
     );
 
+    Task<OverallBalance> GetMyOverallBalanceAsync(
+        Guid userId,
+        CancellationToken ct = default
+    );
+
     Task<(decimal paid, decimal owed, decimal net)>
     GetMemberNetInGroupAsync(
         Guid groupId,

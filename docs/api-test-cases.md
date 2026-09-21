@@ -10,7 +10,7 @@ matching rows here change with it.
 Case IDs (`AUTH-03`, `EXP-11`, ...) are stable. Reference them in commits, PRs and test method names
 so a failing test maps back to a documented intent.
 
-**Status (2026-09-07):** P0 and P1 implemented - 89 tests, all passing. P2 and P3 not yet written.
+**Status (2026-09-21):** P0 and P1 implemented - 96 tests, all passing. P2 and P3 not yet written.
 
 ---
 
@@ -69,6 +69,7 @@ empty cells are the backlog.
 | POST | `/api/GroupInvitation/{token}/join` | required | `AUTH-08`, `INV-05..07` |
 | GET | `/api/UserConnection` | required | `CON-01` |
 | GET | `/api/Activity/me` | required | `ACT-01..03` |
+| GET | `/api/Balance/me` | required | `BAL-06..11` |
 
 > **`GroupMemberController` is authorized again.** Its three routes used to answer anonymously - one
 > of them leaking member names, user ids, roles and join dates over the public tunnel. `a0f55d8`
@@ -98,7 +99,7 @@ The layer the mobile app cannot work without. **Implemented** - 34 tests, all pa
 | `AUTH-05` | Login with correct credentials | `200` + token | pass |
 | `AUTH-06` | Login with a wrong password | `401` | pass |
 | `AUTH-07` | Login with an unknown email | `401`, **and a response body identical to `AUTH-06`** - no user enumeration | pass |
-| `AUTH-08` | Table-driven: call every authenticated route with no `Authorization` header | `401` for all | pass (22 routes) |
+| `AUTH-08` | Table-driven: call every authenticated route with no `Authorization` header | `401` for all | pass (23 routes) |
 | `AUTH-09` | Call an authenticated route with a token whose signature was altered | `401` | pass |
 | `AUTH-10` | Call an authenticated route with an expired token | `401`. `ClockSkew` is 2 minutes, so backdate well past it | pass |
 | `AUTH-11` | The token issued by register is accepted by an authenticated route | `200`. Guards the issuer / audience / signing-key wiring | pass |
@@ -163,6 +164,12 @@ them. **Implemented** - 40 tests, all passing (2026-08-24).
 | `BAL-03` | **10.00 split three ways** | nets still sum to `0`, no cent created or lost | pass |
 | `BAL-04` | Two expenses in opposite directions net off | one netted pair, not two rows | pass |
 | `BAL-05` | A pair balance under the `0.01` settle threshold | no debt edge, rather than a debt rounded up to a whole cent | pass |
+| `BAL-06` | `GET /api/Balance/me` for a user with no groups (and so no `Member` row) | zeros and `groupCount = 0`, not `404 member_not_found` | pass |
+| `BAL-07` | Two groups pulling opposite ways | both sides summed, `groupCount = 2`, and the totals equal the sum of each group's `/overview` summary | pass |
+| `BAL-08` | One group holding a debt in each direction | both totals kept, net `0`, `groupCount = 1` - the count is of groups with an open debt, not of non-zero nets | pass |
+| `BAL-09` | Every debt settled up | zeros and `groupCount = 0` | pass |
+| `BAL-10` | Group soft-deleted | drops out of the totals and the count | pass |
+| `BAL-11` | Another user's group holds debts | absent from my totals | pass |
 | `SET-01` | Settle up in full | pair drops to `Settled` | pass |
 | `SET-02` | Settle up partially | remainder correct | pass |
 | `SET-03` | Settle up to yourself | `400`, `code = invalid_request` | pass |

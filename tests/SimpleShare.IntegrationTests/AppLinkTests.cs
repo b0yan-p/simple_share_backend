@@ -29,7 +29,7 @@ public sealed class AppLinkTests(ApiFixture fixture)
 
         body.ShouldContain("delegate_permission/common.handle_all_urls");
         body.ShouldContain("\"namespace\":\"android_app\"");
-        body.ShouldContain("com.choxster.simpleshare");
+        body.ShouldContain("app.shareorb.simpleshare");
         body.ShouldContain("sha256_cert_fingerprints");
     }
 

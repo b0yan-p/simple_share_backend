@@ -17,7 +17,7 @@ namespace simpleShare_backend.Common.Endpoints;
 public static class AppLinkEndpoints
 {
     private const string PlayStoreUrl =
-        "https://play.google.com/store/apps/details?id=com.choxster.simpleshare";
+        "https://play.google.com/store/apps/details?id=app.shareorb.simpleshare";
 
     public static void MapAppLinkEndpoints(this WebApplication app)
     {

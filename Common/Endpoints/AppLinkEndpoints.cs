@@ -19,13 +19,24 @@ public static class AppLinkEndpoints
     private const string PlayStoreUrl =
         "https://play.google.com/store/apps/details?id=app.shareorb.simpleshare";
 
+    /// <summary>
+    /// Google's asset-link verifier caches these files and Android asks Google,
+    /// not the origin - so without an explicit header a wrong package name or a
+    /// missing fingerprint stays live for Google's default hour, and no amount
+    /// of reinstalling on the device works around it. Five minutes keeps a fix
+    /// cheap to ship; the payload is a few hundred bytes fetched by a crawler.
+    /// </summary>
+    private const string WellKnownCacheControl = "public, max-age=300";
+
     public static void MapAppLinkEndpoints(this WebApplication app)
     {
         app.MapMethods(
                 "/.well-known/assetlinks.json",
                 ["GET", "HEAD"],
-                (IConfiguration config) =>
+                (HttpContext http, IConfiguration config) =>
                 {
+                    http.Response.Headers.CacheControl = WellKnownCacheControl;
+
                     var statement = new[]
                     {
                         new
@@ -48,8 +59,10 @@ public static class AppLinkEndpoints
         app.MapMethods(
                 "/.well-known/apple-app-site-association",
                 ["GET", "HEAD"],
-                (IConfiguration config) =>
+                (HttpContext http, IConfiguration config) =>
                 {
+                    http.Response.Headers.CacheControl = WellKnownCacheControl;
+
                     var association = new
                     {
                         applinks = new

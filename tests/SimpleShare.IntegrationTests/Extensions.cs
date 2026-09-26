@@ -67,6 +67,33 @@ public static class ApiExtensions
     public static void UseBearer(this HttpClient client, string token) =>
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
 
+    // --------------------------------------------------------------- google
+
+    /// <summary>
+    /// An idToken the test double accepts in place of a Google-signed one. Name
+    /// claims default to a complete profile; pass null to leave one out.
+    /// </summary>
+    public static string GoogleToken(
+        string email,
+        string? subject = null,
+        bool emailVerified = true,
+        string? givenName = "Grace",
+        string? familyName = "Hopper",
+        string? name = "Grace Hopper") =>
+        FakeGoogleAuthService.CreateToken(new Google.Apis.Auth.GoogleJsonWebSignature.Payload
+        {
+            Subject = subject ?? Guid.NewGuid().ToString("N"),
+            Email = email,
+            EmailVerified = emailVerified,
+            GivenName = givenName,
+            FamilyName = familyName,
+            Name = name,
+        });
+
+    public static async Task<HttpResponseMessage> GoogleLoginAsync(
+        this HttpClient client, string idToken, CancellationToken ct) =>
+        await client.PostAsJsonAsync("/api/Auth/google", new { IdToken = idToken }, ct);
+
     /// <summary>
     /// Asserts the full error contract in one call: status, problem+json content
     /// type, the `code` extension the mobile client branches on, and the presence
@@ -366,7 +393,7 @@ public static class ApiExtensions
     /// a broken setup step from surfacing as a bare NullReferenceException three
     /// lines later.
     /// </summary>
-    private static async Task<T> ReadOkAsync<T>(
+    internal static async Task<T> ReadOkAsync<T>(
         this HttpResponseMessage response, CancellationToken ct)
     {
         var body = await response.Content.ReadAsStringAsync(ct);

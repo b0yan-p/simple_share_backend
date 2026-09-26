@@ -6,6 +6,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using simpleShare_backend.Common.Endpoints;
 using simpleShare_backend.Common.Exceptions;
+using simpleShare_backend.Common.Security;
 using simpleShare_backend.Data;
 using simpleShare_backend.Infrastructure;
 using simpleShare_backend.Interfaces;
@@ -102,6 +103,8 @@ builder.Services.AddCors(options =>
 #region Services scope
 
 builder.Services.AddScoped<ITokenService, TokenService>();
+builder.Services.AddScoped<IAuthSessionService, AuthSessionService>();
+builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IUserRepository, UserRepository>();
 builder.Services.AddScoped<IRepositoryAsync, RepositoryAsync>();
 builder.Services.AddScoped<IGroupMemberRepository, GroupMemberRepository>();
@@ -116,6 +119,10 @@ builder.Services.AddScoped<IExpenseService, ExpenseService>();
 builder.Services.AddScoped<IBalanceService, BalanceService>();
 builder.Services.AddScoped<IActivityService, ActivityService>();
 builder.Services.AddScoped<IActivityWriter, ActivityWriter>();
+
+builder.Services.Configure<GoogleAuthOptions>(builder.Configuration.GetSection(GoogleAuthOptions.SectionName));
+builder.Services.AddScoped<IGoogleAuthService, GoogleAuthService>();
+builder.Services.AddScoped<IExternalAccountService, ExternalAccountService>();
 
 #endregion
 

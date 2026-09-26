@@ -1,6 +1,12 @@
 # Google Sign-In — specifikacija za backend
 
-Status: **predlog za implementaciju** (nije implementirano)
+Status: **implementirano** (2026-09-26): §1–§7 i testovi. §8 nije implementiran.
+Test ID-jevi su u `docs/api-test-cases.md` pomjereni na `AUTH-12..20`, jer su `AUTH-01..11` već zauzeti.
+Implementacija se po strukturi razlikuje od koda u §4–§6, dok ponašanje ostaje isto:
+- `GoogleUserInfo` je zamijenjen sa `ExternalIdentity`, koji ne zavisi od providera.
+- Logika naloga (find/link/create/rola) je u `ExternalAccountService`.
+- Member se kreira kroz `MemberService.EnsureMemberForUserAsync`.
+- Kontroler samo orkestrira te pozive.
 Datum: 2026-09-26
 
 Cilj: mobilna aplikacija dobija Google identitet, šalje ga SimpleShare API-ju, a API vraća
@@ -351,6 +357,12 @@ Odluke koje ova specifikacija donosi, da budu eksplicitne:
 4. **Nema refresh tokena.** Postojeći JWT od 7 dana ostaje jedini mehanizam — mijenjati ga
    nije dio ovog feature-a.
 5. **Google `picture` se ignoriše.** `Member` nema polje za avatar; dodavanje bi bilo scope creep.
+
+### Poznati rizik: pre-hijacking preko `/register` (prihvaćen privremeno)
+
+`/register` ne potvrđuje email. Napadač može registrovati tuđi email sa svojom lozinkom, a kad se
+vlasnik kasnije prijavi Google-om, auto-link ga veže na taj nalog. Napadač pritom i dalje zna
+lozinku. Rizik je prihvaćen jer se email/pass registracija uklanja u sljedećem koraku i tada nestaje.
 
 ### Poznato ograničenje (van obima, ali vrijedi znati)
 

@@ -1,110 +1,27 @@
-using System.Net;
-using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using simpleShare_backend.Contracts.Auth;
-using simpleShare_backend.Infrastructure;
-using simpleShare_backend.Interfaces;
-using simpleShare_backend.Models.Identity;
 using simpleShare_backend.Services;
 
 namespace simpleShare_backend.Controllers
 {
+    // Errors are AppExceptions answered by GlobalExceptionHandler, and invalid
+    // bodies never get here - [ApiController] answers validation_error.
     [Route("api/[controller]")]
     [ApiController]
-    public class AuthController(UserManager<User> userManager, ITokenService tokenService, IMemberService memberService, IRepositoryAsync repo) : ControllerBase
+    public class AuthController(IAuthService authService) : ControllerBase
     {
-        private readonly UserManager<User> _userManager = userManager;
-        private readonly ITokenService _tokenService = tokenService;
-        private readonly IMemberService _memberService = memberService;
-        private readonly IRepositoryAsync _repo = repo;
+        private readonly IAuthService _authService = authService;
 
         [HttpPost("register")]
-        public async Task<IActionResult> RegisterAsync([FromBody] RegisterRequest input)
-        {
-            try
-            {
-                if (!ModelState.IsValid)
-                    return BadRequest(ModelState);
-
-                var user = new User
-                {
-                    FirstName = input.FirstName,
-                    LastName = input.LastName,
-                    Email = input.Email,
-                    UserName = input.Email
-                };
-
-                if (input.Password != input.RepeatPassword)
-                    return BadRequest("Passwords does not matches");
-
-
-                var createUser = await _userManager.CreateAsync(user, input.Password);
-                if (!createUser.Succeeded) return BadRequest(createUser.Errors);
-
-                var roleResult = await _userManager.AddToRoleAsync(user, "User");
-                if (!roleResult.Succeeded)
-                    return StatusCode((int)HttpStatusCode.InternalServerError, roleResult.Errors);
-
-                var existingMember = await _memberService.GetMemberByUserIdAsync(user.Id);
-                if (existingMember is null)
-                {
-                    await _memberService.CreateMemberFromUserAsync(user);
-                    await _repo.SaveChangesAsync();
-                }
-
-                var roles = await _userManager.GetRolesAsync(user);
-                return Ok(
-                    new LoginUserResponse
-                    {
-                        Id = user.Id,
-                        Email = user.Email!,
-                        FirstName = user.FirstName,
-                        LastName = user.LastName,
-                        Token = _tokenService.CreateToken(user, roles)
-                    }
-                );
-            }
-            catch (Exception e)
-            {
-                return StatusCode((int)HttpStatusCode.InternalServerError, e.Message);
-            }
-        }
+        public async Task<ActionResult<LoginUserResponse>> RegisterAsync([FromBody] RegisterRequest input) =>
+            Ok(await _authService.RegisterAsync(input));
 
         [HttpPost("login")]
-        public async Task<IActionResult> LoginAsync([FromBody] LoginRequest input)
-        {
-            try
-            {
-                if (!ModelState.IsValid)
-                    return BadRequest(ModelState);
+        public async Task<ActionResult<LoginUserResponse>> LoginAsync([FromBody] LoginRequest input) =>
+            Ok(await _authService.LoginAsync(input));
 
-                var user = await _userManager.FindByEmailAsync(input.Email);
-                if (user is null)
-                    return Unauthorized("Invalid email or password");
-
-
-                var isPasswordValid = await _userManager.CheckPasswordAsync(user, input.Password);
-                if (!isPasswordValid)
-                    return Unauthorized("Invalid email or password");
-
-                var userRole = await _userManager.GetRolesAsync(user);
-                var token = _tokenService.CreateToken(user, userRole);
-
-                return Ok(
-                    new LoginUserResponse
-                    {
-                        Id = user.Id,
-                        Email = user.Email!,
-                        FirstName = user.FirstName,
-                        LastName = user.LastName,
-                        Token = token
-                    }
-                );
-            }
-            catch (Exception e)
-            {
-                return StatusCode((int)HttpStatusCode.InternalServerError, e.Message);
-            }
-        }
+        [HttpPost("google")]
+        public async Task<ActionResult<LoginUserResponse>> GoogleLoginAsync([FromBody] GoogleLoginRequest input, CancellationToken ct) =>
+            Ok(await _authService.GoogleLoginAsync(input.IdToken, ct));
     }
 }

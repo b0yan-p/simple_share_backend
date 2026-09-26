@@ -1,6 +1,9 @@
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using simpleShare_backend.Services;
 using Testcontainers.PostgreSql;
 
 namespace SimpleShare.IntegrationTests;
@@ -21,6 +24,8 @@ public sealed class ApiFixture : WebApplicationFactory<Program>, IAsyncLifetime
     // HS256 needs >= 32 bytes of key material; the app throws at startup if
     // this is shorter.
     public const string JwtSigningKey = "integration-tests-signing-key-0123456789abcdef";
+
+    public const string GoogleClientId = "integration-tests.apps.googleusercontent.com";
 
     // Same image and tag as production, so EF migrations, Npgsql behaviour and
     // `numeric` decimal semantics are the ones the deployment actually runs.
@@ -46,7 +51,17 @@ public sealed class ApiFixture : WebApplicationFactory<Program>, IAsyncLifetime
                 ["JWT:Issuer"] = JwtIssuer,
                 ["JWT:Audience"] = JwtAudience,
                 ["JWT:SigningKey"] = JwtSigningKey,
+                // Only reached by tokens the fake hands to the real service. Must be
+                // non-empty: without an audience the real service refuses to run.
+                ["Google:ClientId"] = GoogleClientId,
             }));
+
+        // Google cannot issue tokens in CI; see FakeGoogleAuthService.
+        builder.ConfigureTestServices(services =>
+        {
+            services.AddScoped<GoogleAuthService>();
+            services.AddScoped<IGoogleAuthService, FakeGoogleAuthService>();
+        });
 
         // The host is built lazily on the first CreateClient(), which is after
         // InitializeAsync has started the container - so the connection string

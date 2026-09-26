@@ -18,7 +18,7 @@ public class MemberService(IRepositoryAsync repo) : IMemberService
             Email = user.Email,
             NormalizedEmail = user.Email?.Trim().ToUpper(),
             UserId = user.Id,
-            DisplayName = $"{user.FirstName} {user.LastName}",
+            DisplayName = $"{user.FirstName} {user.LastName}".Trim(),
             FirstName = user.FirstName,
             LastName = user.LastName,
             CreatedAt = DateTime.UtcNow,
@@ -65,6 +65,17 @@ public class MemberService(IRepositoryAsync repo) : IMemberService
     {
         MemberFilterByUser spec = new(userId);
         var member = await repo.GetSingleDefaultAsync<Member, Guid>(spec, true);
+        return member;
+    }
+
+    public async Task<Member> EnsureMemberForUserAsync(User user)
+    {
+        var member = await GetMemberByUserIdAsync(user.Id);
+        if (member is not null)
+            return member;
+
+        member = await CreateMemberFromUserAsync(user);
+        await repo.SaveChangesAsync();
         return member;
     }
 }

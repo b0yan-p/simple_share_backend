@@ -11,4 +11,6 @@ public interface IMemberService
     // Task<Member> CreateMemberAsync(CreateMemberRequest input);
     Task<Member> CreateMemberFromUserAsync(User user);
     Task<Member?> GetMemberByUserIdAsync(Guid userId);
+    /// <summary>Returns the user's Member, creating and saving it if missing.</summary>
+    Task<Member> EnsureMemberForUserAsync(User user);
 }

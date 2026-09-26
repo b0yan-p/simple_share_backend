@@ -10,7 +10,7 @@ matching rows here change with it.
 Case IDs (`AUTH-03`, `EXP-11`, ...) are stable. Reference them in commits, PRs and test method names
 so a failing test maps back to a documented intent.
 
-**Status (2026-09-21):** P0 and P1 implemented - 96 tests, all passing. P2 and P3 not yet written.
+**Status (2026-09-26):** P0 and P1 implemented - 108 tests, all passing. P2 and P3 not yet written.
 
 ---
 
@@ -45,7 +45,8 @@ empty cells are the backlog.
 | GET | `/.well-known/apple-app-site-association` | anonymous | `LNK-02` |
 | GET | `/join/{token}` | anonymous | `LNK-03..05` |
 | POST | `/api/Auth/register` | anonymous | `AUTH-01..04` |
-| POST | `/api/Auth/login` | anonymous | `AUTH-05..07` |
+| POST | `/api/Auth/login` | anonymous | `AUTH-05..07`, `AUTH-18` |
+| POST | `/api/Auth/google` | anonymous | `AUTH-12..20` |
 | POST | `/api/Group` | required | `GRP-01`, `GRP-09` |
 | PUT | `/api/Group` | required | `GRP-02`, `XT-01` |
 | GET | `/api/Group` | required | `GRP-03` |
@@ -93,20 +94,34 @@ The layer the mobile app cannot work without. **Implemented** - 34 tests, all pa
 |---|---|---|---|
 | `HLTH-01` | `GET /health` against an empty database | `200`. Proves migrations, the `Roles` `HasData` seed and startup seeding all survive a cold start | pass |
 | `AUTH-01` | Register with a valid payload | `200`, body carries `Id`, `Email`, `FirstName`, `LastName` and a non-empty `Token` | pass |
-| `AUTH-02` | Register with an email that already exists | `400` | pass |
-| `AUTH-03` | Register with a password below policy (no digit / no uppercase / under 6 chars) | `400`, one case per rule | pass (4 cases) |
-| `AUTH-04` | Register with `Password != RepeatPassword` | `400` | pass |
+| `AUTH-02` | Register with an email that already exists | `400`, `code = registration_failed` | pass |
+| `AUTH-03` | Register with a password below policy (no digit / no uppercase / under 6 chars) | `400`, `code = registration_failed`, one case per rule | pass (4 cases) |
+| `AUTH-04` | Register with `Password != RepeatPassword` | `400`, `code = passwords_mismatch` | pass |
 | `AUTH-05` | Login with correct credentials | `200` + token | pass |
-| `AUTH-06` | Login with a wrong password | `401` | pass |
-| `AUTH-07` | Login with an unknown email | `401`, **and a response body identical to `AUTH-06`** - no user enumeration | pass |
+| `AUTH-06` | Login with a wrong password | `401`, `code = invalid_credentials` | pass |
+| `AUTH-07` | Login with an unknown email | `401`, **same `code` and message as `AUTH-06`** (only `traceId` differs) - no user enumeration | pass |
 | `AUTH-08` | Table-driven: call every authenticated route with no `Authorization` header | `401` for all | pass (23 routes) |
 | `AUTH-09` | Call an authenticated route with a token whose signature was altered | `401` | pass |
 | `AUTH-10` | Call an authenticated route with an expired token | `401`. `ClockSkew` is 2 minutes, so backdate well past it | pass |
 | `AUTH-11` | The token issued by register is accepted by an authenticated route | `200`. Guards the issuer / audience / signing-key wiring | pass |
+| `AUTH-12` | `POST /api/Auth/google` with a garbage `idToken` | `400`, `code = google_token_invalid`. The only Google case that goes through the real signature check | pass |
+| `AUTH-13` | First Google login for an unknown email | `200`, user created with Google names, token accepted by an authenticated route | pass |
+| `AUTH-14` | Second Google login with the same `sub` | `200`, **same `Id`** and same member id as the first login | pass |
+| `AUTH-15` | Google login for an email registered through `/register` | `200`, same `Id` as the local account, registered names kept | pass |
+| `AUTH-16` | Google payload with `email_verified = false` | `400`, `code = google_email_unverified` | pass |
+| `AUTH-17` | Google payload without an email | `400`, `code = google_email_missing` | pass |
+| `AUTH-18` | `/login` with a password for an account created through Google | `401`, same `code` and message as `AUTH-06` | pass |
+| `AUTH-19` | Google payload missing `given_name` / `family_name` / `name` | `200`, names resolved from `name`, then from the email local part | pass |
+| `AUTH-20` | `POST /api/Auth/google` with no `idToken` | `400`, `code = validation_error` | pass |
 
 Lives in `AuthTests.cs`, `HealthTests.cs` and `AuthorizationMatrixTests.cs`. `AUTH-10` is the one
 sanctioned place a token is minted rather than obtained from `/api/Auth/register`: `TokenService`
 issues 7-day tokens, so expiry cannot be reached any other way.
+
+Google cannot issue tokens in CI, so `ApiFixture` swaps `IGoogleAuthService` for
+`FakeGoogleAuthService`. Its `test-google:` tokens skip only the signature check. The email checks
+and name resolution still run through the real `GoogleAuthService.ToExternalIdentity`, and any other token
+goes to the real service.
 
 ---
 

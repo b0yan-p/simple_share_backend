@@ -80,6 +80,9 @@ public class GlobalExceptionHandler(
         if (ex is ValidationAppException vex)
             return (StatusCodes.Status400BadRequest, "Validation failed", vex.Code, vex.Errors);
 
+        if (ex is UnauthorizedAppException uax)
+            return (StatusCodes.Status401Unauthorized, "Unauthorized", uax.Code, null);
+
         if (ex is NotFoundAppException nfx)
             return (StatusCodes.Status404NotFound, "Not found", nfx.Code, null);
 

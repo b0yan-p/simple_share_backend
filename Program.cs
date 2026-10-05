@@ -4,6 +4,8 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
+using Resend;
+using simpleShare_backend.Common.Email;
 using simpleShare_backend.Common.Endpoints;
 using simpleShare_backend.Common.Exceptions;
 using simpleShare_backend.Common.Security;
@@ -124,6 +126,14 @@ builder.Services.Configure<GoogleAuthOptions>(builder.Configuration.GetSection(G
 builder.Services.AddScoped<IGoogleAuthService, GoogleAuthService>();
 builder.Services.AddScoped<IExternalAccountService, ExternalAccountService>();
 
+// The key never lives in appsettings: User Secrets locally, Resend__ApiKey in production.
+builder.Services.Configure<ResendOptions>(builder.Configuration.GetSection(ResendOptions.SectionName));
+builder.Services.AddResend(options =>
+{
+    options.ApiToken = builder.Configuration[$"{ResendOptions.SectionName}:ApiKey"] ?? string.Empty;
+});
+builder.Services.AddScoped<IEmailService, ResendEmailService>();
+
 #endregion
 
 var app = builder.Build();
@@ -144,6 +154,7 @@ if (app.Environment.IsDevelopment())
     // TODO add swagger here
     app.UseSwagger();
     app.UseSwaggerUI();
+    app.MapDevEmailEndpoints();
 }
 
 app.UseCors("AllowAll");

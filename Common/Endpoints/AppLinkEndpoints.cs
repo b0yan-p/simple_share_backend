@@ -75,6 +75,11 @@ public static class AppLinkEndpoints
                                     components = new[]
                                     {
                                         new { _slash = "/join/*", comment = "group invite links" },
+                                        new
+                                        {
+                                            _slash = "/verify-email*",
+                                            comment = "email confirmation links",
+                                        },
                                     },
                                 },
                             },

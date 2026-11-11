@@ -42,7 +42,11 @@ public static class DbSeeder
                 FirstName = seed.FirstName,
                 LastName = seed.LastName,
                 Email = seed.Email,
-                UserName = seed.Email
+                UserName = seed.Email,
+                // Seeded accounts never go through registration, so nothing
+                // would ever mail them a confirmation link - without this they
+                // are created in a state that can no longer log in.
+                EmailConfirmed = true
             };
 
             var createUser = await userManager.CreateAsync(user, seed.Password);

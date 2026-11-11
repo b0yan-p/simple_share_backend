@@ -23,6 +23,11 @@ EXPOSE 8080
 
 COPY --from=build /app/publish .
 
+# Created before the USER switch and handed to that uid, so a named volume
+# mounted here inherits the ownership instead of coming up root-owned - which
+# the app cannot write to, and Data Protection keys would be lost on restart.
+RUN mkdir -p /app/data-protection-keys && chown $APP_UID /app/data-protection-keys
+
 # APP_UID is defined by the base image (non-root, uid 1654).
 USER $APP_UID
 

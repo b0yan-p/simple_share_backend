@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
@@ -23,6 +24,9 @@ builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
 
 builder.Services.AddHealthChecks();
 
+// Backs the resend cooldown in EmailVerificationService.
+builder.Services.AddMemoryCache();
+
 builder
     .Services.AddOpenApi()
     .AddEndpointsApiExplorer()
@@ -39,7 +43,10 @@ builder
         options.Password.RequiredLength = 6;
         options.Password.RequireNonAlphanumeric = false;
     })
-    .AddEntityFrameworkStores<ApplicationDbContext>();
+    .AddEntityFrameworkStores<ApplicationDbContext>()
+    // Email confirmation tokens come from here. Without it
+    // GenerateEmailConfirmationTokenAsync throws NotSupportedException.
+    .AddDefaultTokenProviders();
 
 builder
     .Services.AddAuthentication(options =>
@@ -134,6 +141,23 @@ builder.Services.AddResend(options =>
 });
 builder.Services.AddScoped<IEmailService, ResendEmailService>();
 
+builder.Services.Configure<AppLinkOptions>(builder.Configuration.GetSection(AppLinkOptions.SectionName));
+builder.Services.AddScoped<IEmailVerificationService, EmailVerificationService>();
+
+// Identity's confirmation tokens are Data Protection payloads, so they only
+// outlive a restart if the keys do. Unset means the in-memory default, which is
+// what local runs and tests want; in production it points at a mounted volume.
+var dataProtectionKeysPath = builder.Configuration["DataProtection:KeysPath"];
+if (!string.IsNullOrWhiteSpace(dataProtectionKeysPath))
+{
+    builder
+        .Services.AddDataProtection()
+        // Pinned rather than derived from the content root, which changes between
+        // the image and a local run and would silently invalidate every key.
+        .SetApplicationName("SimpleShare")
+        .PersistKeysToFileSystem(new DirectoryInfo(dataProtectionKeysPath));
+}
+
 #endregion
 
 var app = builder.Build();
@@ -151,7 +175,6 @@ await DbSeeder.SeedUsersAsync(app.Services);
 if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
-    // TODO add swagger here
     app.UseSwagger();
     app.UseSwaggerUI();
     app.MapDevEmailEndpoints();
@@ -186,6 +209,7 @@ app.UseAuthorization();
 app.MapHealthChecks("/health").AllowAnonymous();
 
 app.MapAppLinkEndpoints();
+app.MapEmailVerificationEndpoints();
 
 app.MapControllers();
 

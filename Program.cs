@@ -128,6 +128,7 @@ builder.Services.AddScoped<IExpenseService, ExpenseService>();
 builder.Services.AddScoped<IBalanceService, BalanceService>();
 builder.Services.AddScoped<IActivityService, ActivityService>();
 builder.Services.AddScoped<IActivityWriter, ActivityWriter>();
+builder.Services.AddScoped<IBetaSignupService, BetaSignupService>();
 
 builder.Services.Configure<GoogleAuthOptions>(builder.Configuration.GetSection(GoogleAuthOptions.SectionName));
 builder.Services.AddScoped<IGoogleAuthService, GoogleAuthService>();

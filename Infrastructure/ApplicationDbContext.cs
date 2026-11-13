@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 using simpleShare_backend.Domain;
 using simpleShare_backend.Models.Domain;
+using simpleShare_backend.Models.Enums;
 using simpleShare_backend.Models.Identity;
 
 namespace simpleShare_backend.Data;
@@ -21,6 +22,8 @@ public class ApplicationDbContext(DbContextOptions dbContextOptions)
     public DbSet<Activity> Activities { get; set; }
     public DbSet<OutboxMessage> OutboxMessages { get; set; }
     public DbSet<GroupInvitation> GroupInvitations { get; set; }
+    public DbSet<BetaSignup> BetaSignups { get; set; }
+
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -240,6 +243,37 @@ public class ApplicationDbContext(DbContextOptions dbContextOptions)
             // At most one live link per group: get-or-create leans on this, and
             // without it two concurrent first visits would mint two tokens.
             b.HasIndex(x => x.GroupId).IsUnique().HasFilter("\"IsActive\"");
+        });
+        #endregion
+
+        #region BetaSignup
+        builder.Entity<BetaSignup>(b =>
+        {
+            b.ToTable("BetaSignups");
+
+            b.HasKey(x => x.Id);
+
+            b.Property(x => x.Email)
+                .IsRequired()
+                .HasMaxLength(254);
+
+            b.Property(x => x.NormalizedEmail)
+                .IsRequired()
+                .HasMaxLength(254);
+
+            b.Property(x => x.Status)
+                .HasConversion<short>()
+                .HasDefaultValue(BetaSignupStatus.Waitlisted);
+
+            b.Property(x => x.CreatedAt)
+                .HasDefaultValueSql("NOW()");
+
+            b.Property(x => x.InvitedAt)
+                .IsRequired(false);
+
+            // Prevent duplicate registrations regardless of email casing.
+            b.HasIndex(x => x.NormalizedEmail)
+                .IsUnique();
         });
         #endregion
 

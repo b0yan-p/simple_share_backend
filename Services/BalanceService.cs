@@ -1,420 +1,196 @@
+using System.Data;
 using Microsoft.EntityFrameworkCore;
 using simpleShare_backend.Common.Exceptions;
 using simpleShare_backend.Data;
 using simpleShare_backend.Models.Application;
 using simpleShare_backend.Models.Enums;
+using simpleShare_backend.Services.Calculations;
+
+[assembly: System.Runtime.CompilerServices.InternalsVisibleTo("SimpleShare.UnitTests")]
 
 namespace simpleShare_backend.Services;
 
-public class BalanceService(
-    ApplicationDbContext db,
-    IMemberService memberService
-) : IBalanceService
+public class BalanceService(ApplicationDbContext db, IMemberService memberService, ILogger<BalanceService> logger) : IBalanceService
 {
     public async Task<GroupBalances> GetGroupBalancesAsync(Guid groupId, Guid userId, CancellationToken ct = default)
     {
-        var myMember = await memberService.GetMemberByUserIdAsync(userId)
+        var member = await memberService.GetMemberByUserIdAsync(userId)
             ?? throw new NotFoundAppException("member_not_found", "Member does not exist!");
-
-        var isActive = await db.GroupMembers
-            .AsNoTracking()
-            .Where(gm =>
-                gm.GroupId == groupId
-                && gm.MemberId == myMember.Id
-            )
-            .AnyAsync(cancellationToken: ct);
-
-        if (!isActive)
+        if (!await db.GroupMembers.AsNoTracking().AnyAsync(x => x.GroupId == groupId
+            && x.MemberId == member.Id && x.LeftAt == null && x.GroupMemberStatus != GroupMemberStatus.Deleted, ct))
             throw new NotFoundAppException("member_not_found", "Member not found in group");
-
-        var activeMembers = await db.GroupMembers
-            .AsNoTracking()
-            .Where(
-                x => x.LeftAt == null && x.GroupId == groupId
-            )
-            .Select(x => new
-            {
-                x.MemberId,
-                x.Member.DisplayName,
-            })
-            .ToListAsync(ct);
-
-        var names = activeMembers.ToDictionary(x => x.MemberId, x => x.DisplayName);
-
-        var expensesInGroup = db.Expenses
-            .AsNoTracking()
-            .Where(e => e.GroupId == groupId && e.DeletedAt == null);
-
-        // Paid totals by group member
-        var paidRows = await db.ExpensePayments
-        .AsNoTracking()
-        .Where(p =>
-            p.Expense.GroupId == groupId
-            && p.Expense.DeletedAt == null
-        )
-        .GroupBy(p => p.PaidByMemberId)
-        .Select(g => new
-        {
-            MemberId = g.Key,
-            Amount = g.Sum(x => x.Amount)
-        })
-        .ToListAsync(ct);
-
-        var paid = paidRows.ToDictionary(x => x.MemberId, x => x.Amount);
-
-        // Split totals by group members
-        var owedRows = await db.ExpenseSplits
-            .AsNoTracking()
-            .Where(s =>
-                s.Expense.GroupId == groupId
-                && s.Expense.DeletedAt == null
-            )
-            .GroupBy(s => s.OwedByMemberId)
-            .Select(s => new { MemberId = s.Key, Amount = s.Sum(x => x.Amount) })
-            .ToListAsync(cancellationToken: ct);
-
-        var owed = owedRows.ToDictionary(x => x.MemberId, x => x.Amount);
-
-        // Merge into member balances
-        var members = activeMembers
-            .Select(m =>
-            {
-                paid.TryGetValue(m.MemberId, out var p);
-                owed.TryGetValue(m.MemberId, out var o);
-
-                p = Math.Round(p, 2, MidpointRounding.AwayFromZero);
-                o = Math.Round(o, 2, MidpointRounding.AwayFromZero);
-
-                return new MemberBalance
-                {
-                    MemberId = m.MemberId,
-                    DisplayName = m.DisplayName,
-                    Paid = p,
-                    Owed = o,
-                    Side = p - o > 0 ? BalanceSide.Creditor
-                        : p - o < 0 ? BalanceSide.Debtor
-                        : BalanceSide.Settled
-                };
-            })
-            // current member first, then by net descending
-            .OrderByDescending(x => x.MemberId == myMember.Id)
-            .ThenByDescending(x => x.Net)
-            .ToList();
-
-        var totalPaidQuery = db.ExpensePayments
-            .AsNoTracking()
-            .Where(p =>
-                p.Expense.GroupId == groupId &&
-                p.Expense.DeletedAt == null
-            )
-            .GroupBy(p => p.ExpenseId)
-            .Select(g => new
-            {
-                ExpenseId = g.Key,
-                TotalPaid = g.Sum(x => x.Amount)
-            })
-            .Where(x => x.TotalPaid > 0);
-
-        // Debts / Global Ledger
-        var debtRows = await db.ExpenseSplits
-            .AsNoTracking()
-            .Where(s =>
-                // activeIds.Contains(s.OwedByMemberId) &&
-                s.Expense.GroupId == groupId
-                && s.Expense.DeletedAt == null
-            ).Join(
-                db.ExpensePayments
-                    .AsNoTracking()
-                    .Where(p =>
-                        p.Expense.GroupId == groupId &&
-                        p.Expense.DeletedAt == null
-                    ),
-                s => s.ExpenseId,
-                p => p.ExpenseId,
-                (s, p) => new { s, p }
-            )
-            .Join(
-                totalPaidQuery,
-                sp => sp.p.ExpenseId,
-                t => t.ExpenseId,
-                (sp, t) => new { sp.s, sp.p, t.TotalPaid }
-            )
-            .Where(x => x.s.OwedByMemberId != x.p.PaidByMemberId)
-            .GroupBy(x => new
-            {
-                DebtorId = x.s.OwedByMemberId,
-                CreditorId = x.p.PaidByMemberId
-            })
-            .Select(g => new DebtRow
-            {
-                GroupId = groupId,
-                DebtorId = g.Key.DebtorId,
-                CreditorId = g.Key.CreditorId,
-                Amount = g.Sum(x => x.s.Amount * x.p.Amount / x.TotalPaid)
-            })
-            .ToListAsync(ct);
-
-        // Debts raw relationships between members
-        // var debtsRaw = debtRows
-        //     .Select(x =>
-        //     {
-        //         var amount = Math.Round(x.Amount, 2, MidpointRounding.AwayFromZero);
-
-        //         return new DebtEdge
-        //         {
-        //             DebtorMemberId = x.DebtorId,
-        //             DebtorDisplayName = names.TryGetValue(x.DebtorId, out var dn) ? dn : "Unknown",
-        //             CreditorMemberId = x.CreditorId,
-        //             CreditorDisplayName = names.TryGetValue(x.CreditorId, out var cn) ? cn : "Unknown",
-        //             Amount = amount
-        //         };
-        //     })
-        //     .Where(x => x.Amount != 0)
-        //     .OrderByDescending(x => x.Amount)
-        //     .ToList();
-
-        // Debts relationships between members NORMALIZED
-        var netByPair = BuildNetByPair(debtRows);
-
-        var debtsNet = new List<DebtEdge>();
-
-        debtsNet.AddRange(BuildNetDebts(netByPair, names));
-
-        debtsNet = [.. debtsNet.OrderByDescending(x => x.Amount)];
-
+        var groups = await GetGroupsBalancesAsync([groupId], ct);
+        var group = groups.GetValueOrDefault(groupId)
+            ?? throw new NotFoundAppException("group_not_found", "Group does not exist!");
         return new GroupBalances
         {
             GroupId = groupId,
-            Members = members,
-            Debts = debtsNet
+            Members = group.Members.OrderByDescending(x => x.MemberId == member.Id)
+                .ThenByDescending(x => x.Net).ThenBy(x => x.MemberId).ToArray(),
+            Debts = group.Debts
         };
     }
 
-    public async Task<OverallBalance> GetMyOverallBalanceAsync(
-        Guid userId,
-        CancellationToken ct = default
-    )
+    /// <summary>Loads a bounded set of groups in batches, using one consistent database snapshot.</summary>
+    public async Task<IReadOnlyDictionary<Guid, GroupBalances>> GetGroupsBalancesAsync(
+        IReadOnlyCollection<Guid> groupIds, CancellationToken ct = default)
     {
-        // No member row yet means the user has never been in a group - registering alone does not
-        // create one. That is a zero balance, not a 404: the home screen asks for this on every
-        // entry and a brand new account must not be met with an error.
-        var myMember = await memberService.GetMemberByUserIdAsync(userId);
-
-        if (myMember is null)
-            return new OverallBalance();
-
-        var groupIds = await db.GroupMembers
-            .AsNoTracking()
-            .Where(gm =>
-                gm.MemberId == myMember.Id
-                && gm.LeftAt == null
-                && gm.GroupMemberStatus != GroupMemberStatus.Deleted
-                && gm.Group.DeletedAt == null
-            )
-            .Select(gm => gm.GroupId)
-            .ToListAsync(ct);
-
-        if (groupIds.Count == 0)
-            return new OverallBalance();
-
-        var splits = db.ExpenseSplits
-            .AsNoTracking()
-            .Where(s =>
-                s.Expense.DeletedAt == null
-                && groupIds.Contains(s.Expense.GroupId)
-            );
-
-        var payments = db.ExpensePayments
-            .AsNoTracking()
-            .Where(p =>
-                p.Expense.DeletedAt == null
-                && groupIds.Contains(p.Expense.GroupId)
-            );
-
-        var totalPaidQuery = payments
-            .GroupBy(p => p.ExpenseId)
-            .Select(g => new
+        if (groupIds.Count == 0) return new Dictionary<Guid, GroupBalances>();
+        // A concurrent expense edit must not mix old payments with new splits across queries.
+        var ownsTransaction = db.Database.CurrentTransaction == null;
+        await using var snapshot = ownsTransaction
+            ? await db.Database.BeginTransactionAsync(IsolationLevel.RepeatableRead, ct) : null;
+        var groups = await db.Groups.AsNoTracking().Where(x => groupIds.Contains(x.Id) && x.DeletedAt == null)
+            .Select(x => new { x.Id, x.SimplifyDebts }).ToListAsync(ct);
+        var ids = groups.Select(x => x.Id).ToArray();
+        var expenses = await db.Expenses.AsNoTracking().Where(x => ids.Contains(x.GroupId) && x.DeletedAt == null)
+            .Select(x => new { x.Id, x.GroupId, x.TotalAmount }).ToListAsync(ct);
+        var payments = await db.ExpensePayments.AsNoTracking()
+            .Where(x => ids.Contains(x.Expense.GroupId) && x.Expense.DeletedAt == null)
+            .Select(x => new { x.ExpenseId, Id = x.PaidByMemberId, x.Amount }).ToListAsync(ct);
+        var splits = await db.ExpenseSplits.AsNoTracking()
+            .Where(x => ids.Contains(x.Expense.GroupId) && x.Expense.DeletedAt == null)
+            .Select(x => new { x.ExpenseId, Id = x.OwedByMemberId, x.Amount }).ToListAsync(ct);
+        var financialIds = payments.Select(x => x.Id).Concat(splits.Select(x => x.Id)).Distinct().ToArray();
+        var members = await db.GroupMembers.AsNoTracking()
+            .Where(x => ids.Contains(x.GroupId) && ((x.LeftAt == null && x.GroupMemberStatus != GroupMemberStatus.Deleted)
+                || financialIds.Contains(x.MemberId)))
+            .Select(x => new
             {
-                ExpenseId = g.Key,
-                TotalPaid = g.Sum(x => x.Amount)
-            })
-            .Where(x => x.TotalPaid > 0);
-
-        // Same pro-rata edge shape as GetGroupBalancesAsync, but across every group at once
-        // and narrowed to the edges I am part of - the others cannot move my own totals.
-        var debtRows = await splits
-            .Join(
-                payments,
-                s => s.ExpenseId,
-                p => p.ExpenseId,
-                (s, p) => new { s, p }
-            )
-            .Join(
-                totalPaidQuery,
-                sp => sp.p.ExpenseId,
-                t => t.ExpenseId,
-                (sp, t) => new { sp.s, sp.p, t.TotalPaid }
-            )
-            .Where(x => x.s.OwedByMemberId != x.p.PaidByMemberId)
-            .Where(x =>
-                x.s.OwedByMemberId == myMember.Id
-                || x.p.PaidByMemberId == myMember.Id
-            )
-            .GroupBy(x => new
-            {
-                x.s.Expense.GroupId,
-                DebtorId = x.s.OwedByMemberId,
-                CreditorId = x.p.PaidByMemberId
-            })
-            .Select(g => new DebtRow
-            {
-                GroupId = g.Key.GroupId,
-                DebtorId = g.Key.DebtorId,
-                CreditorId = g.Key.CreditorId,
-                Amount = g.Sum(x => x.s.Amount * x.p.Amount / x.TotalPaid)
-            })
-            .ToListAsync(ct);
-
-        var balance = new OverallBalance();
-
-        // Netting is per group, and the groups are then summed - debts are never netted across
-        // group boundaries. Going through BuildNetByPair/BuildNetDebts keeps the pair
-        // normalization, the 0.01 threshold and the rounding identical to the group-scoped
-        // endpoints, so /Balance/me can never disagree with /Group/{id}/overview.
-        var noNames = new Dictionary<Guid, string>();
-
-        foreach (var group in debtRows.GroupBy(r => r.GroupId))
+                x.GroupId, Id = x.MemberId, x.Member.DisplayName,
+                Active = x.LeftAt == null && x.GroupMemberStatus != GroupMemberStatus.Deleted
+            }).ToListAsync(ct);
+        var paymentLookup = payments.ToLookup(x => x.ExpenseId);
+        var splitLookup = splits.ToLookup(x => x.ExpenseId);
+        var expenseLookup = expenses.ToLookup(x => x.GroupId);
+        var memberLookup = members.ToLookup(x => x.GroupId);
+        var result = new Dictionary<Guid, GroupBalances>();
+        foreach (var group in groups)
         {
-            var edges = BuildNetDebts(BuildNetByPair([.. group]), noNames);
-
-            foreach (var edge in edges)
+            var relevantIds = expenseLookup[group.Id]
+                .SelectMany(x => paymentLookup[x.Id].Select(p => p.Id).Concat(splitLookup[x.Id].Select(s => s.Id)))
+                .ToHashSet();
+            var names = memberLookup[group.Id].Where(x => x.Active || relevantIds.Contains(x.Id))
+                .ToDictionary(x => x.Id, x => x.DisplayName);
+            var paid = names.Keys.ToDictionary(x => x, _ => 0m);
+            var owed = names.Keys.ToDictionary(x => x, _ => 0m);
+            var raw = new Dictionary<(Guid Debtor, Guid Creditor), decimal>();
+            try
             {
-                if (edge.CreditorMemberId == myMember.Id)
-                    balance.OwedToMeTotal += edge.Amount;
-                else
-                    balance.IOweTotal += edge.Amount;
+                foreach (var expense in expenseLookup[group.Id])
+                {
+                    var payers = paymentLookup[expense.Id].OrderBy(x => x.Id).ToArray();
+                    var shares = splitLookup[expense.Id].OrderBy(x => x.Id).ToArray();
+                    foreach (var edge in BuildExpenseLedger(expense.TotalAmount,
+                        payers.Select(x => (x.Id, x.Amount)).ToArray(),
+                        shares.Select(x => (x.Id, x.Amount)).ToArray()))
+                    {
+                        if (edge.Amount > 0)
+                        {
+                            var key = (edge.Debtor, edge.Creditor);
+                            raw[key] = raw.GetValueOrDefault(key) + edge.Amount;
+                        }
+                    }
+                    foreach (var p in payers) paid[p.Id] += p.Amount;
+                    foreach (var s in shares) owed[s.Id] += s.Amount;
+                }
+                var calculated = DebtGraphCalculator.Calculate(
+                    names.Keys.Select(x => new DebtGraphCalculator.Member(x, paid[x], owed[x])),
+                    raw.Select(x => new DebtGraphCalculator.RawDebt(x.Key.Debtor, x.Key.Creditor, x.Value)));
+                result[group.Id] = new GroupBalances
+                {
+                    GroupId = group.Id,
+                    Members = calculated.Members.Select(x => new MemberBalance
+                    {
+                        MemberId = x.Id, DisplayName = names[x.Id], Paid = x.Paid / 100m, Owed = x.Owed / 100m,
+                        Side = x.Net > 0 ? BalanceSide.Creditor : x.Net < 0 ? BalanceSide.Debtor : BalanceSide.Settled
+                    }).ToArray(),
+                    Debts = (group.SimplifyDebts ? calculated.Simplified : calculated.Regular).Select(x => new DebtEdge
+                    {
+                        DebtorMemberId = x.Debtor, DebtorDisplayName = names[x.Debtor],
+                        CreditorMemberId = x.Creditor, CreditorDisplayName = names[x.Creditor], Amount = x.Cents / 100m
+                    }).ToArray()
+                };
             }
-
-            if (edges.Count > 0)
-                balance.GroupCount++;
+            catch (Exception ex) when (ex is ArgumentException or OverflowException or KeyNotFoundException)
+            {
+                logger.LogError(ex, "Financial data is inconsistent for group {GroupId}", group.Id);
+                throw new ConflictAppException("financial_data_inconsistent", "Financial data is inconsistent. Please contact support.");
+            }
         }
-
-        return balance;
+        if (snapshot != null) await snapshot.CommitAsync(ct);
+        return result;
     }
 
-    public async Task<(decimal paid, decimal owed, decimal net)>
-    GetMemberNetInGroupAsync(
-        Guid groupId,
-        Guid memberId
-    )
+    // The adapter preserves exact row/column totals before the calculator's cent projection.
+    // Eight decimal places bound intermediate division residues, without rounding stored money.
+    internal static IReadOnlyList<DebtGraphCalculator.RawDebt> BuildExpenseLedger(decimal total,
+        IReadOnlyList<(Guid Id, decimal Amount)> payments, IReadOnlyList<(Guid Id, decimal Amount)> splits)
     {
-        var paid = await db.ExpensePayments
-            .AsNoTracking()
-            .Where(x =>
-                x.PaidByMemberId == memberId &&
-                x.Expense.GroupId == groupId &&
-                x.Expense.DeletedAt == null
-            )
-            .SumAsync(x => (decimal?)x.Amount) ?? 0m;
-
-        var owed = await db.ExpenseSplits
-            .AsNoTracking()
-            .Where(x =>
-                x.OwedByMemberId == memberId &&
-                x.Expense.GroupId == groupId &&
-                x.Expense.DeletedAt == null
-            )
-            .SumAsync(x => (decimal?)x.Amount) ?? 0m;
-
-        paid = Math.Round(paid, 2, MidpointRounding.AwayFromZero);
-        owed = Math.Round(owed, 2, MidpointRounding.AwayFromZero);
-
-        var net = paid - owed;
-
-        return (paid, owed, net);
-    }
-
-    private static List<DebtEdge> BuildNetDebts(
-        Dictionary<(Guid A, Guid B), decimal> netByPair,
-        Dictionary<Guid, string> names
-    )
-    {
-        const decimal settleThreshold = 0.01m;
-        var debtsNet = new List<DebtEdge>(netByPair.Count);
-
-        foreach (var kvp in netByPair)
+        var payers = payments.OrderBy(x => x.Id).ToArray();
+        var shares = splits.OrderBy(x => x.Id).ToArray();
+        if (total <= 0 || payers.Length == 0 || shares.Length == 0
+            || payers.Any(x => x.Amount <= 0) || shares.Any(x => x.Amount <= 0)
+            || payers.Select(x => x.Id).Distinct().Count() != payers.Length
+            || shares.Select(x => x.Id).Distinct().Count() != shares.Length
+            || payers.Sum(x => x.Amount) != total || shares.Sum(x => x.Amount) != total)
+            throw new ArgumentException("Expense has inconsistent payments or splits.");
+        var result = new List<DebtGraphCalculator.RawDebt>();
+        var remaining = payers.Select(x => x.Amount).ToArray();
+        var totalRemaining = total;
+        foreach (var share in shares)
         {
-            var a = kvp.Key.A;
-            var b = kvp.Key.B;
-            var net = kvp.Value;
-
-            if (net > -settleThreshold && net < settleThreshold)
-                continue;
-
-            var roundedNet = Math.Round(net, 2, MidpointRounding.AwayFromZero);
-            if (roundedNet == 0)
-                continue;
-
-            Guid debtorId;
-            Guid creditorId;
-            decimal amount;
-
-            if (roundedNet > 0)
+            var row = share.Amount;
+            for (var i = 0; i < payers.Length; i++)
             {
-                debtorId = a;
-                creditorId = b;
-                amount = roundedNet;
+                var amount = share.Amount == totalRemaining ? remaining[i]
+                    : Math.Min(row, Math.Min(remaining[i],
+                        decimal.Floor(share.Amount * (remaining[i] / totalRemaining) * 100000000m) / 100000000m));
+                result.Add(new(share.Id, payers[i].Id, amount));
+                remaining[i] -= amount;
+                row -= amount;
             }
-            else
+            // Deterministically allocate division residues within the same expense, never
+            // adding/subtracting source money or accepting mismatched source totals.
+            for (var i = 0; row > 0 && i < payers.Length; i++)
             {
-                debtorId = b;
-                creditorId = a;
-                amount = -roundedNet;
+                var amount = Math.Min(row, remaining[i]);
+                result.Add(new(share.Id, payers[i].Id, amount));
+                remaining[i] -= amount;
+                row -= amount;
             }
-
-            debtsNet.Add(new DebtEdge
-            {
-                DebtorMemberId = debtorId,
-                DebtorDisplayName = names.TryGetValue(debtorId, out var dn) ? dn : "Unknown",
-                CreditorMemberId = creditorId,
-                CreditorDisplayName = names.TryGetValue(creditorId, out var cn) ? cn : "Unknown",
-                Amount = amount
-            });
+            totalRemaining -= share.Amount;
+            if (row != 0 || remaining.Any(x => x < 0))
+                throw new ArgumentException("Proportional ledger allocation failed.");
         }
-
-        return debtsNet;
+        return result;
     }
 
-    private static Dictionary<(Guid A, Guid B), decimal> BuildNetByPair(IReadOnlyList<DebtRow> debtRows)
+    public async Task<OverallBalance> GetMyOverallBalanceAsync(Guid userId, CancellationToken ct = default)
     {
-        var netByPair = new Dictionary<(Guid A, Guid B), decimal>(debtRows.Count);
-
-        foreach (var r in debtRows)
+        var member = await memberService.GetMemberByUserIdAsync(userId);
+        if (member == null) return new OverallBalance();
+        var ids = await db.GroupMembers.AsNoTracking().Where(x => x.MemberId == member.Id && x.LeftAt == null
+            && x.GroupMemberStatus != GroupMemberStatus.Deleted && x.Group.DeletedAt == null)
+            .Select(x => x.GroupId).ToArrayAsync(ct);
+        var groups = await GetGroupsBalancesAsync(ids, ct);
+        var result = new OverallBalance();
+        foreach (var group in groups.Values)
         {
-            var debtor = r.DebtorId;
-            var creditor = r.CreditorId;
-
-            var cmp = debtor.CompareTo(creditor);
-            if (cmp == 0) continue;
-
-            var a = cmp < 0 ? debtor : creditor;
-            var b = cmp < 0 ? creditor : debtor;
-
-            // if debtor is A => +amount (A owes B), else -amount (B owes A)
-            var signed = cmp < 0 ? r.Amount : -r.Amount;
-
-            netByPair.TryGetValue((a, b), out var current);
-            netByPair[(a, b)] = current + signed;
+            var relevant = group.Debts.Where(x => x.DebtorMemberId == member.Id || x.CreditorMemberId == member.Id).ToArray();
+            result.OwedToMeTotal += relevant.Where(x => x.CreditorMemberId == member.Id).Sum(x => x.Amount);
+            result.IOweTotal += relevant.Where(x => x.DebtorMemberId == member.Id).Sum(x => x.Amount);
+            if (relevant.Length > 0) result.GroupCount++;
         }
-
-        return netByPair;
+        return result;
     }
 
-    private sealed class DebtRow
+    public async Task<(decimal paid, decimal owed, decimal net)> GetMemberNetInGroupAsync(Guid groupId, Guid memberId)
     {
-        public Guid GroupId { get; set; }
-        public Guid DebtorId { get; set; }
-        public Guid CreditorId { get; set; }
-        public decimal Amount { get; set; }
+        var groups = await GetGroupsBalancesAsync([groupId]);
+        var group = groups.GetValueOrDefault(groupId)
+            ?? throw new NotFoundAppException("group_not_found", "Group does not exist!");
+        var balance = group.Members.SingleOrDefault(x => x.MemberId == memberId);
+        return balance == null ? (0m, 0m, 0m) : (balance.Paid, balance.Owed, balance.Net);
     }
 }

@@ -161,7 +161,7 @@ public sealed class BalanceTests(ApiFixture fixture)
     }
 
     [Fact] // BAL-05
-    public async Task Balances_WhenAPairIsUnderTheSettleThreshold_ReportNoDebt()
+    public async Task Balances_WithSubCentAmounts_UseSharedBalancedCentProjection()
     {
         // Arrange
         var ct = TestContext.Current.CancellationToken;
@@ -179,11 +179,11 @@ public sealed class BalanceTests(ApiFixture fixture)
         var balances = await client.GetBalancesAsync(groupId, ct);
 
         // Assert
-        // 0.005 is under the 0.01 settle threshold, so the pair is settled rather
-        // than carrying a debt rounded up to a whole cent.
-        balances.Debts.ShouldBeEmpty(
-            $"a half-cent gap must not become a debt. {string.Join(", ", balances.Debts.Select(d => d.Amount))}");
-        balances.DebtBetween(debtor: me, creditor: bo).ShouldBeNull();
+        // Both modes now use the same balanced cent projection instead of a per-pair
+        // sub-cent forgiveness threshold. Gross paid/owed totals determine the net.
+        balances.ShouldOwe(debtor: me, creditor: bo, amount: 0.01m);
+        balances.NetOf(me).ShouldBe(-0.01m);
+        balances.NetOf(bo).ShouldBe(0.01m);
         balances.ShouldNetToZero();
     }
 }

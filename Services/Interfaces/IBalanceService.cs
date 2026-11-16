@@ -4,6 +4,9 @@ namespace simpleShare_backend.Services;
 
 public interface IBalanceService
 {
+    Task<IReadOnlyDictionary<Guid, GroupBalances>> GetGroupsBalancesAsync(
+        IReadOnlyCollection<Guid> groupIds, CancellationToken ct = default);
+
     Task<GroupBalances> GetGroupBalancesAsync(
         Guid groupId,
         Guid userId,

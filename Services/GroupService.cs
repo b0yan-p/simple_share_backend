@@ -180,33 +180,13 @@ public class GroupService(
 
         var groupIds = pagedGroups.Select(g => g.Id).ToList();
 
-        var paidByGroup = await db
-            .ExpensePayments.AsNoTracking()
-            .Where(p =>
-                p.PaidByMemberId == myMemberId
-                && p.Expense.DeletedAt == null
-                && groupIds.Contains(p.Expense.GroupId)
-            )
-            .GroupBy(p => p.Expense.GroupId)
-            .Select(g => new { GroupId = g.Key, Amount = g.Sum(x => x.Amount) })
-            .ToDictionaryAsync(x => x.GroupId, x => x.Amount);
-
-        var owedByGroup = await db
-            .ExpenseSplits.AsNoTracking()
-            .Where(s =>
-                s.OwedByMemberId == myMemberId
-                && s.Expense.DeletedAt == null
-                && groupIds.Contains(s.Expense.GroupId)
-            )
-            .GroupBy(s => s.Expense.GroupId)
-            .Select(g => new { GroupId = g.Key, Amount = g.Sum(x => x.Amount) })
-            .ToDictionaryAsync(x => x.GroupId, x => x.Amount);
+        var balancesByGroup = await balanceService.GetGroupsBalancesAsync(groupIds);
 
         var list = pagedGroups
             .Select(g =>
             {
-                paidByGroup.TryGetValue(g.Id, out var paid);
-                owedByGroup.TryGetValue(g.Id, out var owed);
+                var net = balancesByGroup.GetValueOrDefault(g.Id)?.Members
+                    .SingleOrDefault(x => x.MemberId == myMemberId)?.Net ?? 0m;
 
                 return new GroupResponse
                 {
@@ -215,7 +195,7 @@ public class GroupService(
                     SimplifyDebts = g.SimplifyDebts,
                     CreatedAt = g.CreatedAt,
                     DeletedAt = g.DeletedAt,
-                    NetBalance = paid - owed,
+                    NetBalance = net,
                 };
             })
             .ToList();
@@ -266,33 +246,13 @@ public class GroupService(
 
         var groupIds = pagedGroups.Select(g => g.Id).ToList();
 
-        var paidByGroup = await db
-            .ExpensePayments.AsNoTracking()
-            .Where(p =>
-                p.PaidByMemberId == myMemberId
-                && p.Expense.DeletedAt == null
-                && groupIds.Contains(p.Expense.GroupId)
-            )
-            .GroupBy(p => p.Expense.GroupId)
-            .Select(g => new { GroupId = g.Key, Amount = g.Sum(x => x.Amount) })
-            .ToDictionaryAsync(x => x.GroupId, x => x.Amount);
-
-        var owedByGroup = await db
-            .ExpenseSplits.AsNoTracking()
-            .Where(s =>
-                s.OwedByMemberId == myMemberId
-                && s.Expense.DeletedAt == null
-                && groupIds.Contains(s.Expense.GroupId)
-            )
-            .GroupBy(s => s.Expense.GroupId)
-            .Select(g => new { GroupId = g.Key, Amount = g.Sum(x => x.Amount) })
-            .ToDictionaryAsync(x => x.GroupId, x => x.Amount);
+        var balancesByGroup = await balanceService.GetGroupsBalancesAsync(groupIds);
 
         return pagedGroups
             .Select(g =>
             {
-                paidByGroup.TryGetValue(g.Id, out var paid);
-                owedByGroup.TryGetValue(g.Id, out var owed);
+                var net = balancesByGroup.GetValueOrDefault(g.Id)?.Members
+                    .SingleOrDefault(x => x.MemberId == myMemberId)?.Net ?? 0m;
 
                 return new GroupResponse
                 {
@@ -301,7 +261,7 @@ public class GroupService(
                     SimplifyDebts = g.SimplifyDebts,
                     CreatedAt = g.CreatedAt,
                     DeletedAt = g.DeletedAt,
-                    NetBalance = paid - owed,
+                    NetBalance = net,
                 };
             })
             .ToList();

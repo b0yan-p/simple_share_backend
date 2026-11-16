@@ -14,7 +14,7 @@ public sealed class BalanceTests(ApiFixture fixture)
     private async Task<(HttpClient Client, Guid GroupId, Guid[] Members)>
         GroupOfAsync(CancellationToken ct, params string[] otherMemberNames)
     {
-        var (client, _) = await fixture.RegisterAsync(ct);
+        var (client, _) = await fixture.CreateAuthenticatedClientAsync(ct);
         var group = await client.CreateGroupAsync("Balances", ct);
         var me = await client.MyMemberIdAsync(group.Id, ct);
 

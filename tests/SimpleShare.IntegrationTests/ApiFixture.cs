@@ -3,6 +3,9 @@ using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using simpleShare_backend.Services.Interfaces;
+using Resend;
 using simpleShare_backend.Services;
 using Testcontainers.PostgreSql;
 
@@ -16,8 +19,7 @@ namespace SimpleShare.IntegrationTests;
 public sealed class ApiFixture : WebApplicationFactory<Program>, IAsyncLifetime
 {
     // Exposed so negative-path tests can mint a deliberately invalid token
-    // (expired, wrong issuer). Positive paths must still get their tokens from
-    // POST /api/Auth/register - see rule 6 in the skill.
+    // (expired, wrong issuer). Normal setup uses Identity and the real session service.
     public const string JwtIssuer = "https://test.local";
     public const string JwtAudience = "https://test.local";
 
@@ -54,11 +56,18 @@ public sealed class ApiFixture : WebApplicationFactory<Program>, IAsyncLifetime
                 // Only reached by tokens the fake hands to the real service. Must be
                 // non-empty: without an audience the real service refuses to run.
                 ["Google:ClientId"] = GoogleClientId,
+                ["Resend:ApiKey"] = string.Empty,
+                ["AppLinks:PublicBaseUrl"] = "https://test.local",
+                ["DataProtection:KeysPath"] = string.Empty,
             }));
 
-        // Google cannot issue tokens in CI; see FakeGoogleAuthService.
+        // No outbound email in tests. Google validation is isolated separately.
         builder.ConfigureTestServices(services =>
         {
+            services.RemoveAll<IEmailService>();
+            services.RemoveAll<IResend>();
+            services.AddSingleton<RecordingEmailService>();
+            services.AddSingleton<IEmailService>(sp => sp.GetRequiredService<RecordingEmailService>());
             services.AddScoped<GoogleAuthService>();
             services.AddScoped<IGoogleAuthService, FakeGoogleAuthService>();
         });

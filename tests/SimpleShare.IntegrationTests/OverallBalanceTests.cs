@@ -30,7 +30,7 @@ public sealed class OverallBalanceTests(ApiFixture fixture)
     {
         // Arrange
         var ct = TestContext.Current.CancellationToken;
-        var (client, _) = await fixture.RegisterAsync(ct);
+        var (client, _) = await fixture.CreateAuthenticatedClientAsync(ct, createMember: false);
 
         // Act
         var balance = await client.GetMyBalanceAsync(ct);
@@ -47,7 +47,7 @@ public sealed class OverallBalanceTests(ApiFixture fixture)
     {
         // Arrange
         var ct = TestContext.Current.CancellationToken;
-        var (client, _) = await fixture.RegisterAsync(ct);
+        var (client, _) = await fixture.CreateAuthenticatedClientAsync(ct);
 
         var (trip, meOnTrip, tripOthers) = await GroupOfAsync(client, "Trip", ct, "Bo", "Cy");
         await client.AddExpenseAsync(trip, ApiExtensions.ExpenseBody(
@@ -80,7 +80,7 @@ public sealed class OverallBalanceTests(ApiFixture fixture)
     {
         // Arrange
         var ct = TestContext.Current.CancellationToken;
-        var (client, _) = await fixture.RegisterAsync(ct);
+        var (client, _) = await fixture.CreateAuthenticatedClientAsync(ct);
         var (groupId, me, others) = await GroupOfAsync(client, "Balances", ct, "Bo", "Cy");
         var (bo, cy) = (others[0], others[1]);
 
@@ -106,7 +106,7 @@ public sealed class OverallBalanceTests(ApiFixture fixture)
     {
         // Arrange
         var ct = TestContext.Current.CancellationToken;
-        var (client, _) = await fixture.RegisterAsync(ct);
+        var (client, _) = await fixture.CreateAuthenticatedClientAsync(ct);
         var (groupId, me, others) = await GroupOfAsync(client, "Trip", ct, "Bo", "Cy");
         var (bo, cy) = (others[0], others[1]);
 
@@ -142,7 +142,7 @@ public sealed class OverallBalanceTests(ApiFixture fixture)
     {
         // Arrange
         var ct = TestContext.Current.CancellationToken;
-        var (client, _) = await fixture.RegisterAsync(ct);
+        var (client, _) = await fixture.CreateAuthenticatedClientAsync(ct);
         var (groupId, me, others) = await GroupOfAsync(client, "Trip", ct, "Bo");
 
         await client.AddExpenseAsync(groupId,
@@ -163,8 +163,8 @@ public sealed class OverallBalanceTests(ApiFixture fixture)
     {
         // Arrange
         var ct = TestContext.Current.CancellationToken;
-        var (mine, _) = await fixture.RegisterAsync(ct);
-        var (theirs, _) = await fixture.RegisterAsync(ct);
+        var (mine, _) = await fixture.CreateAuthenticatedClientAsync(ct);
+        var (theirs, _) = await fixture.CreateAuthenticatedClientAsync(ct);
 
         var (groupId, them, others) = await GroupOfAsync(theirs, "Not mine", ct, "Bo");
         await theirs.AddExpenseAsync(groupId,

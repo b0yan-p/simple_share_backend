@@ -10,7 +10,7 @@ matching rows here change with it.
 Case IDs (`AUTH-03`, `EXP-11`, ...) are stable. Reference them in commits, PRs and test method names
 so a failing test maps back to a documented intent.
 
-**Status (2026-09-26):** P0 and P1 implemented - 108 tests, all passing. P2 and P3 not yet written.
+**Historical status (2026-09-26):** 108 tests were reported passing then. This is not a current execution result. The auth cases below include historical expectations; current registration returns `RegisterResponse` without a JWT and is explicitly covered by `EmailAuthTests`.
 
 ---
 
@@ -24,12 +24,11 @@ These apply to every case below.
   comes back as `application/problem+json` with a `code` extension (`splits_sum_invalid`,
   `member_not_in_group`, ...). That string is what the mobile app branches on, so it is the actual
   contract. A test that only checks `400` will pass straight through a rename that breaks the client.
-- **Unique data per test.** Register a fresh user with a GUID-based email in each test rather than
+- **Unique data per test.** Create a fresh Identity user with a GUID-based email in each test rather than
   resetting the database between tests. Cheaper, and it removes ordering dependencies.
 - **Real Postgres.** Every case assumes `postgres:16-alpine` in a container, with migrations applied
   by the app itself at startup - the same path production takes.
-- **Auth via the real flow.** Get tokens from `POST /api/Auth/register`, never by minting them in the
-  test. That keeps `TokenService` and the JWT validation config under test for free.
+- **Auth setup.** Business tests use `CreateAuthenticatedClientAsync`: isolated Identity users and real JWTs from the session service. Registration/confirmation/login HTTP flows have dedicated tests using an in-memory email transport. See [auth isolation plan](test-auth-isolation-plan.md).
 
 ---
 
@@ -93,7 +92,7 @@ The layer the mobile app cannot work without. **Implemented** - 34 tests, all pa
 | ID | Case | Expected | Status |
 |---|---|---|---|
 | `HLTH-01` | `GET /health` against an empty database | `200`. Proves migrations, the `Roles` `HasData` seed and startup seeding all survive a cold start | pass |
-| `AUTH-01` | Register with a valid payload | `200`, body carries `Id`, `Email`, `FirstName`, `LastName` and a non-empty `Token` | pass |
+| `AUTH-01` | Register with a valid payload | `200`, body carries `Email` and `EmailVerificationRequired`; no JWT; message captured in memory | pass |
 | `AUTH-02` | Register with an email that already exists | `400`, `code = registration_failed` | pass |
 | `AUTH-03` | Register with a password below policy (no digit / no uppercase / under 6 chars) | `400`, `code = registration_failed`, one case per rule | pass (4 cases) |
 | `AUTH-04` | Register with `Password != RepeatPassword` | `400`, `code = passwords_mismatch` | pass |
@@ -103,7 +102,7 @@ The layer the mobile app cannot work without. **Implemented** - 34 tests, all pa
 | `AUTH-08` | Table-driven: call every authenticated route with no `Authorization` header | `401` for all | pass (23 routes) |
 | `AUTH-09` | Call an authenticated route with a token whose signature was altered | `401` | pass |
 | `AUTH-10` | Call an authenticated route with an expired token | `401`. `ClockSkew` is 2 minutes, so backdate well past it | pass |
-| `AUTH-11` | The token issued by register is accepted by an authenticated route | `200`. Guards the issuer / audience / signing-key wiring | pass |
+| `AUTH-11` | The token issued by the real session service is accepted by an authenticated route | `200`. Guards the issuer / audience / signing-key wiring | pass |
 | `AUTH-12` | `POST /api/Auth/google` with a garbage `idToken` | `400`, `code = google_token_invalid`. The only Google case that goes through the real signature check | pass |
 | `AUTH-13` | First Google login for an unknown email | `200`, user created with Google names, token accepted by an authenticated route | pass |
 | `AUTH-14` | Second Google login with the same `sub` | `200`, **same `Id`** and same member id as the first login | pass |
@@ -114,8 +113,7 @@ The layer the mobile app cannot work without. **Implemented** - 34 tests, all pa
 | `AUTH-19` | Google payload missing `given_name` / `family_name` / `name` | `200`, names resolved from `name`, then from the email local part | pass |
 | `AUTH-20` | `POST /api/Auth/google` with no `idToken` | `400`, `code = validation_error` | pass |
 
-Lives in `AuthTests.cs`, `HealthTests.cs` and `AuthorizationMatrixTests.cs`. `AUTH-10` is the one
-sanctioned place a token is minted rather than obtained from `/api/Auth/register`: `TokenService`
+Lives in `AuthTests.cs`, `HealthTests.cs` and `AuthorizationMatrixTests.cs`. `AUTH-10` constructs an expired token for the negative path; normal setup uses the real session service. `TokenService`
 issues 7-day tokens, so expiry cannot be reached any other way.
 
 Google cannot issue tokens in CI, so `ApiFixture` swaps `IGoogleAuthService` for

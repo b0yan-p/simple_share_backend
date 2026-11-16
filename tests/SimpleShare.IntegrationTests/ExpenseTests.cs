@@ -10,7 +10,7 @@ namespace SimpleShare.IntegrationTests;
 public sealed class ExpenseTests(ApiFixture fixture)
 {
     /// The caller's own display name, spelled out here rather than relying on
-    /// RegisterAsync's defaults - EXP-11 and EXP-12 assert against it.
+    /// CreateAuthenticatedClientAsync's defaults - EXP-11 and EXP-12 assert against it.
     private const string MyName = "Ada Lovelace";
 
     /// <summary>
@@ -20,7 +20,7 @@ public sealed class ExpenseTests(ApiFixture fixture)
     private async Task<(HttpClient Client, Guid GroupId, Guid Me, Guid Bo, Guid Cy)>
         ThreeMemberGroupAsync(CancellationToken ct, string name = "Trip")
     {
-        var (client, _) = await fixture.RegisterAsync(ct, firstName: "Ada", lastName: "Lovelace");
+        var (client, _) = await fixture.CreateAuthenticatedClientAsync(ct, firstName: "Ada", lastName: "Lovelace");
         var group = await client.CreateGroupAsync(name, ct);
         var me = await client.MyMemberIdAsync(group.Id, ct);
         var bo = await client.AddVirtualMemberAsync(group.Id, "Bo", ct);

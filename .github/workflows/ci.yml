@@ -33,11 +33,22 @@ jobs:
 
       # Docker is preinstalled on ubuntu-latest, so Testcontainers needs no setup.
       # The first run that touches ApiFixture pulls postgres:16-alpine (~80 MB).
-      - name: Test
+      - name: Build
+        run: dotnet build --configuration Release
+
+      - name: Unit tests
         run: >
-          dotnet test --configuration Release
-          --logger "trx;LogFileName=results.trx"
-          --results-directory ./TestResults
+          dotnet test tests/SimpleShare.UnitTests/SimpleShare.UnitTests.csproj
+          --configuration Release --no-build
+          --logger "trx;LogFileName=unit.trx"
+          --results-directory ./TestResults/unit
+
+      - name: Integration tests
+        run: >
+          dotnet test tests/SimpleShare.IntegrationTests/SimpleShare.IntegrationTests.csproj
+          --configuration Release --no-build
+          --logger "trx;LogFileName=integration.trx"
+          --results-directory ./TestResults/integration
 
       # Renders pass/fail per test in the Checks tab and on the PR, so nobody has
       # to download a .trx. fail-on-error keeps the reporter itself from turning
@@ -46,8 +57,8 @@ jobs:
         if: always()
         uses: dorny/test-reporter@v1
         with:
-          name: integration tests
-          path: TestResults/*.trx
+          name: tests
+          path: TestResults/**/*.trx
           reporter: dotnet-trx
           fail-on-error: false
 

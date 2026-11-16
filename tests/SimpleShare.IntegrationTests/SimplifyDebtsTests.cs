@@ -24,7 +24,7 @@ public sealed class SimplifyDebtsTests(ApiFixture fixture)
     public async Task MultiplePayersWithThirdsUseExactBalancesAndStillRejectCorruption(bool simplify)
     {
         var ct = TestContext.Current.CancellationToken;
-        var (client, _) = await fixture.RegisterAsync(ct);
+        var (client, _) = await fixture.CreateAuthenticatedClientAsync(ct);
         var group = await client.CreateGroupAsync("Thirds", ct);
         var a = await client.MyMemberIdAsync(group.Id, ct);
         var b = await client.AddVirtualMemberAsync(group.Id, "B", ct);
@@ -66,7 +66,7 @@ public sealed class SimplifyDebtsTests(ApiFixture fixture)
     public async Task RedirectedSettlementStaysConsistentAcrossModes(decimal amount)
     {
         var ct = TestContext.Current.CancellationToken;
-        var (client, _) = await fixture.RegisterAsync(ct);
+        var (client, _) = await fixture.CreateAuthenticatedClientAsync(ct);
         var group = await client.CreateGroupAsync("Debts", ct);
         var a = await client.MyMemberIdAsync(group.Id, ct);
         var b = await client.AddVirtualMemberAsync(group.Id, "B", ct);
@@ -103,7 +103,7 @@ public sealed class SimplifyDebtsTests(ApiFixture fixture)
     public async Task OmittedSettingPreservesEnabledMode()
     {
         var ct = TestContext.Current.CancellationToken;
-        var (client, _) = await fixture.RegisterAsync(ct);
+        var (client, _) = await fixture.CreateAuthenticatedClientAsync(ct);
         var group = await client.CreateGroupAsync("Before", ct);
         await SetMode(client, group.Id, true, ct);
         var response = await client.PutAsJsonAsync("/api/Group", new { Id = group.Id, Name = "After" }, ct);
@@ -117,7 +117,7 @@ public sealed class SimplifyDebtsTests(ApiFixture fixture)
     public async Task FractionalBalancesAgreeWithListsOverviewAndRemovalGuard()
     {
         var ct = TestContext.Current.CancellationToken;
-        var (client, _) = await fixture.RegisterAsync(ct);
+        var (client, _) = await fixture.CreateAuthenticatedClientAsync(ct);
         var group = await client.CreateGroupAsync("Fractions", ct);
         var me = await client.MyMemberIdAsync(group.Id, ct);
         var b = await client.AddVirtualMemberAsync(group.Id, "B", ct);
@@ -145,7 +145,7 @@ public sealed class SimplifyDebtsTests(ApiFixture fixture)
     public async Task HistoricalIntermediaryRemainsInLedger()
     {
         var ct = TestContext.Current.CancellationToken;
-        var (client, _) = await fixture.RegisterAsync(ct);
+        var (client, _) = await fixture.CreateAuthenticatedClientAsync(ct);
         var group = await client.CreateGroupAsync("History", ct);
         var me = await client.MyMemberIdAsync(group.Id, ct);
         var b = await client.AddVirtualMemberAsync(group.Id, "B", ct);
@@ -167,7 +167,7 @@ public sealed class SimplifyDebtsTests(ApiFixture fixture)
     public async Task MixedGroupsRemainSeparateAndExcludeUnrelatedEdges()
     {
         var ct = TestContext.Current.CancellationToken;
-        var (client, _) = await fixture.RegisterAsync(ct);
+        var (client, _) = await fixture.CreateAuthenticatedClientAsync(ct);
         var first = await client.CreateGroupAsync("First", ct);
         var me = await client.MyMemberIdAsync(first.Id, ct);
         var b = await client.AddVirtualMemberAsync(first.Id, "B", ct);
@@ -190,7 +190,7 @@ public sealed class SimplifyDebtsTests(ApiFixture fixture)
     public async Task CorruptedSourceIsReportedWithoutRepairingIt()
     {
         var ct = TestContext.Current.CancellationToken;
-        var (client, _) = await fixture.RegisterAsync(ct);
+        var (client, _) = await fixture.CreateAuthenticatedClientAsync(ct);
         var group = await client.CreateGroupAsync("Invalid", ct);
         var me = await client.MyMemberIdAsync(group.Id, ct);
         var b = await client.AddVirtualMemberAsync(group.Id, "B", ct);

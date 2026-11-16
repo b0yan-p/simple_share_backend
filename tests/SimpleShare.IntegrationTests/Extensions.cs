@@ -1,3 +1,7 @@
+using Microsoft.AspNetCore.Identity;
+using simpleShare_backend.Models.Identity;
+using simpleShare_backend.Services;
+using Microsoft.Extensions.DependencyInjection;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
@@ -26,40 +30,41 @@ public static class ApiExtensions
 
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
-    /// <summary>
-    /// Registers a fresh user with a unique email and returns a client already
-    /// carrying its bearer token. Tests never share users - that is what removes
-    /// the need to reset the database between them.
-    /// </summary>
-    public static async Task<(HttpClient Client, LoginUserResponse User)> RegisterAsync(
-        this ApiFixture fixture,
-        CancellationToken ct,
-        string firstName = "Test",
-        string lastName = "User")
+    /// <summary>Creates an isolated, confirmed Identity user and issues a real JWT; no onboarding HTTP calls.</summary>
+    public static async Task<(HttpClient Client, LoginUserResponse User)> CreateAuthenticatedClientAsync(
+        this ApiFixture fixture, CancellationToken ct, string firstName = "Test", string lastName = "User",
+        bool withPassword = false, bool createMember = true)
     {
         var client = fixture.CreateClient();
-        var email = UniqueEmail();
+        var user = await fixture.CreateUserAsync(ct, firstName, lastName, withPassword: withPassword, createMember: createMember);
+        using var scope = fixture.Services.CreateScope();
+        var session = await scope.ServiceProvider.GetRequiredService<IAuthSessionService>().CreateSessionAsync(user);
+        client.UseBearer(session.Token);
+        return (client, session);
+    }
 
-        var response = await client.PostAsJsonAsync("/api/Auth/register", new
+    public static async Task<User> CreateUserAsync(
+        this ApiFixture fixture, CancellationToken ct, string firstName = "Test", string lastName = "User",
+        bool confirmed = true, bool withPassword = false, bool createMember = true, string? email = null)
+    {
+        // Ensure startup migrations and role seeding complete before opening a scope.
+        using var startup = fixture.CreateClient();
+        ct.ThrowIfCancellationRequested();
+        using var scope = fixture.Services.CreateScope();
+        var manager = scope.ServiceProvider.GetRequiredService<UserManager<User>>();
+        var address = email ?? UniqueEmail();
+        var user = new User
         {
-            Email = email,
-            Password = ValidPassword,
-            RepeatPassword = ValidPassword,
-            FirstName = firstName,
-            LastName = lastName,
-        }, ct);
-
-        // An assertion inside a helper, deliberately: it keeps setup failures
-        // distinguishable from the behaviour under test, without putting an
-        // assert in any test's Arrange block.
-        response.StatusCode.ShouldBe(
-            HttpStatusCode.OK, await response.Content.ReadAsStringAsync(ct));
-
-        var user = await response.Content.ReadFromJsonAsync<LoginUserResponse>(ct)
-            ?? throw new InvalidOperationException("register returned an empty body");
-
-        client.UseBearer(user.Token);
-        return (client, user);
+            Id = Guid.NewGuid(), Email = address, UserName = address, FirstName = firstName,
+            LastName = lastName, EmailConfirmed = confirmed
+        };
+        var result = withPassword ? await manager.CreateAsync(user, ValidPassword) : await manager.CreateAsync(user);
+        result.Succeeded.ShouldBeTrue(string.Join("; ", result.Errors.Select(x => x.Code)));
+        var role = await manager.AddToRoleAsync(user, "User");
+        role.Succeeded.ShouldBeTrue(string.Join("; ", role.Errors.Select(x => x.Code)));
+        if (createMember)
+            await scope.ServiceProvider.GetRequiredService<IMemberService>().EnsureMemberForUserAsync(user);
+        return user;
     }
 
     public static string UniqueEmail() => $"u{Guid.NewGuid():N}@test.local";
@@ -119,8 +124,7 @@ public static class ApiExtensions
 
     /// <summary>
     /// Creates a group owned by the caller. Side effect worth knowing: this is
-    /// also what materialises the caller's Member row - registering alone does
-    /// not create one, so any test needing a member id starts here.
+    /// also materialises the caller's Member row when the setup explicitly omits one.
     /// </summary>
     public static async Task<GroupResponse> CreateGroupAsync(
         this HttpClient client, string name, CancellationToken ct)

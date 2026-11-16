@@ -13,7 +13,7 @@ public sealed class GroupTests(ApiFixture fixture)
     {
         // Arrange
         var ct = TestContext.Current.CancellationToken;
-        var (client, _) = await fixture.RegisterAsync(ct);
+        var (client, _) = await fixture.CreateAuthenticatedClientAsync(ct, createMember: false);
 
         // Act
         var response = await client.PostAsJsonAsync("/api/Group", new { Name = "Trip" }, ct);
@@ -34,7 +34,7 @@ public sealed class GroupTests(ApiFixture fixture)
     {
         // Arrange
         var ct = TestContext.Current.CancellationToken;
-        var (client, _) = await fixture.RegisterAsync(ct);
+        var (client, _) = await fixture.CreateAuthenticatedClientAsync(ct);
         var group = await client.CreateGroupAsync("Before", ct);
 
         // Act
@@ -55,12 +55,12 @@ public sealed class GroupTests(ApiFixture fixture)
     {
         // Arrange
         var ct = TestContext.Current.CancellationToken;
-        var (client, _) = await fixture.RegisterAsync(ct);
+        var (client, _) = await fixture.CreateAuthenticatedClientAsync(ct);
         await client.CreateGroupAsync("Mine 1", ct);
         await client.CreateGroupAsync("Mine 2", ct);
         await client.CreateGroupAsync("Mine 3", ct);
 
-        var (stranger, _) = await fixture.RegisterAsync(ct);
+        var (stranger, _) = await fixture.CreateAuthenticatedClientAsync(ct);
         var strangerGroup = await stranger.CreateGroupAsync("Not mine", ct);
 
         // Act
@@ -80,7 +80,7 @@ public sealed class GroupTests(ApiFixture fixture)
     {
         // Arrange
         var ct = TestContext.Current.CancellationToken;
-        var (client, _) = await fixture.RegisterAsync(ct);
+        var (client, _) = await fixture.CreateAuthenticatedClientAsync(ct);
         await client.CreateGroupAsync("Oldest", ct);
         var middle = await client.CreateGroupAsync("Middle", ct);
         var newest = await client.CreateGroupAsync("Newest", ct);
@@ -99,7 +99,7 @@ public sealed class GroupTests(ApiFixture fixture)
     {
         // Arrange
         var ct = TestContext.Current.CancellationToken;
-        var (client, _) = await fixture.RegisterAsync(ct);
+        var (client, _) = await fixture.CreateAuthenticatedClientAsync(ct);
         var group = await client.CreateGroupAsync("Flat", ct);
 
         // Act
@@ -119,7 +119,7 @@ public sealed class GroupTests(ApiFixture fixture)
     {
         // Arrange
         var ct = TestContext.Current.CancellationToken;
-        var (client, _) = await fixture.RegisterAsync(ct);
+        var (client, _) = await fixture.CreateAuthenticatedClientAsync(ct);
         var doomed = await client.CreateGroupAsync("Doomed", ct);
         var kept = await client.CreateGroupAsync("Kept", ct);
 
@@ -139,7 +139,7 @@ public sealed class GroupTests(ApiFixture fixture)
     {
         // Arrange
         var ct = TestContext.Current.CancellationToken;
-        var (client, _) = await fixture.RegisterAsync(ct);
+        var (client, _) = await fixture.CreateAuthenticatedClientAsync(ct);
         var group = await client.CreateGroupAsync("Resurrected", ct);
         var me = await client.MyMemberIdAsync(group.Id, ct);
         var flatmate = await client.AddVirtualMemberAsync(group.Id, "Flatmate", ct);
@@ -168,7 +168,7 @@ public sealed class GroupTests(ApiFixture fixture)
     {
         // Arrange
         var ct = TestContext.Current.CancellationToken;
-        var (client, _) = await fixture.RegisterAsync(ct);
+        var (client, _) = await fixture.CreateAuthenticatedClientAsync(ct);
         var group = await client.CreateGroupAsync("Holiday", ct);
         var me = await client.MyMemberIdAsync(group.Id, ct);
         var bo = await client.AddVirtualMemberAsync(group.Id, "Bo", ct);
@@ -208,7 +208,7 @@ public sealed class GroupTests(ApiFixture fixture)
     {
         // Arrange
         var ct = TestContext.Current.CancellationToken;
-        var (client, _) = await fixture.RegisterAsync(ct);
+        var (client, _) = await fixture.CreateAuthenticatedClientAsync(ct);
         var request = new { Name = new string('x', 49) };   // MaxLength(48)
 
         // Act

@@ -14,12 +14,12 @@ public sealed class GroupMemberTests(ApiFixture fixture)
     {
         // Arrange
         var ct = TestContext.Current.CancellationToken;
-        var (owner, _) = await fixture.RegisterAsync(ct, firstName: "Ann", lastName: "Owner");
+        var (owner, _) = await fixture.CreateAuthenticatedClientAsync(ct, firstName: "Ann", lastName: "Owner");
         var group = await owner.CreateGroupAsync("Shared", ct);
 
         // A registered user has no Member row until they own a group, so the
         // friend has to exist as a member somewhere before being added here.
-        var (friend, _) = await fixture.RegisterAsync(ct, firstName: "Bo", lastName: "Friend");
+        var (friend, _) = await fixture.CreateAuthenticatedClientAsync(ct, firstName: "Bo", lastName: "Friend");
         var friendMemberId = await friend.CreateMemberIdentityAsync(ct);
 
         // Act
@@ -43,7 +43,7 @@ public sealed class GroupMemberTests(ApiFixture fixture)
     {
         // Arrange
         var ct = TestContext.Current.CancellationToken;
-        var (client, _) = await fixture.RegisterAsync(ct);
+        var (client, _) = await fixture.CreateAuthenticatedClientAsync(ct);
         var group = await client.CreateGroupAsync("Ski trip", ct);
 
         // Act
@@ -65,7 +65,7 @@ public sealed class GroupMemberTests(ApiFixture fixture)
     {
         // Arrange
         var ct = TestContext.Current.CancellationToken;
-        var (client, _) = await fixture.RegisterAsync(ct);
+        var (client, _) = await fixture.CreateAuthenticatedClientAsync(ct);
         var group = await client.CreateGroupAsync("Invites", ct);
         var owner = await client.MyMemberIdAsync(group.Id, ct);
         var member = new { DisplayName = "Invitee", InviteUser = true };   // no Email
@@ -96,10 +96,10 @@ public sealed class GroupMemberTests(ApiFixture fixture)
     {
         // Arrange
         var ct = TestContext.Current.CancellationToken;
-        var (owner, _) = await fixture.RegisterAsync(ct);
+        var (owner, _) = await fixture.CreateAuthenticatedClientAsync(ct);
         var group = await owner.CreateGroupAsync("Shared", ct);
 
-        var (member, _) = await fixture.RegisterAsync(ct);
+        var (member, _) = await fixture.CreateAuthenticatedClientAsync(ct);
         var memberId = await member.CreateMemberIdentityAsync(ct);
         await owner.AddExistingMemberAsync(group.Id, memberId, ct);
 
@@ -121,7 +121,7 @@ public sealed class GroupMemberTests(ApiFixture fixture)
     {
         // Arrange
         var ct = TestContext.Current.CancellationToken;
-        var (owner, _) = await fixture.RegisterAsync(ct);
+        var (owner, _) = await fixture.CreateAuthenticatedClientAsync(ct);
         var group = await owner.CreateGroupAsync("Shrinking", ct);
         var me = await owner.MyMemberIdAsync(group.Id, ct);
         var leaving = await owner.AddVirtualMemberAsync(group.Id, "Leaving", ct);

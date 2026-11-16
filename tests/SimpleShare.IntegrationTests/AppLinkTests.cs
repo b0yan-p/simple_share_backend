@@ -61,7 +61,7 @@ public sealed class AppLinkTests(ApiFixture fixture)
     {
         // Arrange
         var ct = TestContext.Current.CancellationToken;
-        var (owner, _) = await fixture.RegisterAsync(ct);
+        var (owner, _) = await fixture.CreateAuthenticatedClientAsync(ct);
         var group = await owner.CreateGroupAsync("Ski trip", ct);
         var invitation = await owner.GetInvitationAsync(group.Id, ct);
         var anonymous = fixture.CreateClient();
@@ -103,7 +103,7 @@ public sealed class AppLinkTests(ApiFixture fixture)
     {
         // Arrange
         var ct = TestContext.Current.CancellationToken;
-        var (owner, _) = await fixture.RegisterAsync(ct);
+        var (owner, _) = await fixture.CreateAuthenticatedClientAsync(ct);
         var group = await owner.CreateGroupAsync("<script>alert(1)</script>", ct);
         var invitation = await owner.GetInvitationAsync(group.Id, ct);
         var anonymous = fixture.CreateClient();

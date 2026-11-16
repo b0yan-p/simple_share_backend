@@ -18,7 +18,7 @@ public sealed class SimplifyDebtsPhase3Tests(ApiFixture fixture)
 {
     private async Task<(HttpClient Client, Guid Group, Guid J, Guid B, Guid N, Guid M)> Example(CancellationToken ct)
     {
-        var (client, _) = await fixture.RegisterAsync(ct);
+        var (client, _) = await fixture.CreateAuthenticatedClientAsync(ct);
         var group = await client.CreateGroupAsync("Phase 3", ct);
         var j = await client.MyMemberIdAsync(group.Id, ct);
         var b = await client.AddVirtualMemberAsync(group.Id, "B", ct);

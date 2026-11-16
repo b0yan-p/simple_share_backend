@@ -13,7 +13,7 @@ public sealed class GroupInvitationTests(ApiFixture fixture)
     {
         // Arrange
         var ct = TestContext.Current.CancellationToken;
-        var (owner, _) = await fixture.RegisterAsync(ct);
+        var (owner, _) = await fixture.CreateAuthenticatedClientAsync(ct);
 
         // Act
         var group = await owner.CreateGroupAsync("Ski trip", ct);
@@ -36,9 +36,9 @@ public sealed class GroupInvitationTests(ApiFixture fixture)
     {
         // Arrange
         var ct = TestContext.Current.CancellationToken;
-        var (owner, _) = await fixture.RegisterAsync(ct);
+        var (owner, _) = await fixture.CreateAuthenticatedClientAsync(ct);
         var group = await owner.CreateGroupAsync("Private", ct);
-        var (outsider, _) = await fixture.RegisterAsync(ct);
+        var (outsider, _) = await fixture.CreateAuthenticatedClientAsync(ct);
 
         // Act
         var response = await outsider.GetAsync($"/api/GroupInvitation/group/{group.Id}", ct);
@@ -52,7 +52,7 @@ public sealed class GroupInvitationTests(ApiFixture fixture)
     {
         // Arrange
         var ct = TestContext.Current.CancellationToken;
-        var (owner, _) = await fixture.RegisterAsync(ct);
+        var (owner, _) = await fixture.CreateAuthenticatedClientAsync(ct);
         var group = await owner.CreateGroupAsync("Weekend trip", ct);
         await owner.AddVirtualMemberAsync(group.Id, "Ghost", ct);
         var invitation = await owner.GetInvitationAsync(group.Id, ct);
@@ -90,10 +90,10 @@ public sealed class GroupInvitationTests(ApiFixture fixture)
     {
         // Arrange
         var ct = TestContext.Current.CancellationToken;
-        var (owner, _) = await fixture.RegisterAsync(ct);
+        var (owner, _) = await fixture.CreateAuthenticatedClientAsync(ct);
         var group = await owner.CreateGroupAsync("Shared", ct);
         var invitation = await owner.GetInvitationAsync(group.Id, ct);
-        var (joiner, _) = await fixture.RegisterAsync(ct, firstName: "Bo", lastName: "Joiner");
+        var (joiner, _) = await fixture.CreateAuthenticatedClientAsync(ct, firstName: "Bo", lastName: "Joiner");
 
         // Act
         var response = await joiner.JoinByTokenAsync(invitation.Token, ct);
@@ -117,10 +117,10 @@ public sealed class GroupInvitationTests(ApiFixture fixture)
     {
         // Arrange
         var ct = TestContext.Current.CancellationToken;
-        var (owner, _) = await fixture.RegisterAsync(ct);
+        var (owner, _) = await fixture.CreateAuthenticatedClientAsync(ct);
         var group = await owner.CreateGroupAsync("Shared", ct);
         var invitation = await owner.GetInvitationAsync(group.Id, ct);
-        var (joiner, _) = await fixture.RegisterAsync(ct);
+        var (joiner, _) = await fixture.CreateAuthenticatedClientAsync(ct);
         await joiner.JoinByTokenAsync(invitation.Token, ct);
 
         // Act
@@ -142,11 +142,11 @@ public sealed class GroupInvitationTests(ApiFixture fixture)
     {
         // Arrange
         var ct = TestContext.Current.CancellationToken;
-        var (owner, _) = await fixture.RegisterAsync(ct);
+        var (owner, _) = await fixture.CreateAuthenticatedClientAsync(ct);
         var group = await owner.CreateGroupAsync("Shared", ct);
         var invitation = await owner.GetInvitationAsync(group.Id, ct);
 
-        var (joiner, _) = await fixture.RegisterAsync(ct);
+        var (joiner, _) = await fixture.CreateAuthenticatedClientAsync(ct);
         var firstJoin = await (await joiner.JoinByTokenAsync(invitation.Token, ct)).ReadJoinAsync(
             ct
         );
@@ -175,11 +175,11 @@ public sealed class GroupInvitationTests(ApiFixture fixture)
     {
         // Arrange
         var ct = TestContext.Current.CancellationToken;
-        var (owner, _) = await fixture.RegisterAsync(ct);
+        var (owner, _) = await fixture.CreateAuthenticatedClientAsync(ct);
         var group = await owner.CreateGroupAsync("Theirs", ct);
         await owner.GetInvitationAsync(group.Id, ct);
 
-        var (outsider, _) = await fixture.RegisterAsync(ct);
+        var (outsider, _) = await fixture.CreateAuthenticatedClientAsync(ct);
         await outsider.CreateGroupAsync("Mine", ct);
 
         // Act

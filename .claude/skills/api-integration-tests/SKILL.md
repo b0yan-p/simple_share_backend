@@ -37,21 +37,20 @@ Pure refactors with no HTTP-visible change need no new tests, but the suite must
    `AuthorizationMatrixTests.cs` rather than written as a one-off.
 4. **Every route taking a `{groupId}` needs a cross-tenant case** in the same file: a second
    authenticated user must get `403` or `404` - never `200`, never `500`.
-5. **Unique data per test.** Each test registers its own user. Do not reset the database between
+5. **Unique data per test.** Each test creates its own Identity user through the test helper. Do not reset the database between
    tests, do not depend on `DbSeeder` accounts, do not share state across tests.
-6. **Real tokens only.** Get them from `POST /api/Auth/register` via the fixture helper. Never mint
-   a JWT inside a test - the issuer, audience and signing-key wiring is part of what is under test.
+6. **Real tokens only.** Use `CreateAuthenticatedClientAsync`, which seeds Identity and calls the real session service. Business setup never calls register/confirm/login. Keep onboarding HTTP flows in dedicated auth tests with `RecordingEmailService`; never send real email. Negative expired-token tests may construct their own invalid tokens.
 7. **One subject per test.** Name them `Method_Scenario_Expectation`, with the case ID from
    `docs/api-test-cases.md` in a comment.
 8. **Arrange / Act / Assert.** Every test is three blocks in that order, separated by a blank line
    and labelled `// Arrange`, `// Act`, `// Assert`. Specifically:
-   - **Arrange** - everything that builds the world: registering users, creating groups, adding
+   - **Arrange** - everything that builds the world: creating isolated users, creating groups, adding
      members, seeding expenses, and the request body. Setup that happens over HTTP is still Arrange.
    - **Act** - *exactly one* call: the request under test. If a test needs two Acts, it is two tests.
    - **Assert** - the response, plus any read-back needed to prove the side effect. A follow-up `GET`
      used to verify a write belongs in Assert, not in a second Act.
    - No assertions in Arrange. If setup must verify something, that check lives inside a helper in
-     `Extensions.cs` (as `RegisterAsync` does), keeping the test body's Assert block the only place
+     `Extensions.cs` (as `CreateAuthenticatedClientAsync` does), keeping the test body's Assert block the only place
      expectations appear.
 9. **Pass `TestContext.Current.CancellationToken`** to every call that accepts one - `GetAsync`,
    `PostAsJsonAsync`, `ReadFromJsonAsync` and friends. Without it a cancelled or timed-out run keeps
@@ -78,7 +77,7 @@ One file per controller, plus the matrix file:
 tests/SimpleShare.IntegrationTests/
   ApiFixture.cs                 # Postgres container + host   (shared, do not edit per-test)
   ApiCollection.cs              # xUnit collection definition (shared)
-  Extensions.cs                 # register/auth + assertion helpers
+  Extensions.cs                 # Identity/auth + assertion helpers
   AuthTests.cs
   GroupTests.cs
   GroupMemberTests.cs
@@ -105,16 +104,17 @@ public sealed class ExpenseTests(ApiFixture fixture)
     public async Task CreateExpense_SplitsDoNotSumToTotal_ReturnsSplitsSumInvalid()
     {
         // Arrange
-        // RegisterAsync creates a fresh user and returns a client with its bearer token set.
-        var (client, user) = await fixture.RegisterAsync();
-        var group = await client.CreateGroupAsync("Trip");
+        // CreateAuthenticatedClientAsync creates a fresh user and returns a client with its bearer token set.
+        var ct = TestContext.Current.CancellationToken;
+        var (client, user) = await fixture.CreateAuthenticatedClientAsync(ct);
+        var group = await client.CreateGroupAsync("Trip", ct);
         var request = new
         {
             Description = "Dinner",
             ExpenseDate = DateTime.UtcNow,
             TotalAmount = 30m,
-            Payments = new[] { new { MemberId = user.MemberId, Amount = 30m } },
-            Splits    = new[] { new { MemberId = user.MemberId, Amount = 20m } },  // wrong on purpose
+            Payments = new[] { new { MemberId = await client.MyMemberIdAsync(group.Id, ct), Amount = 30m } },
+            Splits    = new[] { new { MemberId = await client.MyMemberIdAsync(group.Id, ct), Amount = 20m } },  // wrong on purpose
         };
 
         // Act
@@ -123,7 +123,7 @@ public sealed class ExpenseTests(ApiFixture fixture)
 
         // Assert
         // Checks status, problem+json content type, the `code` and the presence of traceId.
-        await response.ShouldBeProblemAsync(HttpStatusCode.BadRequest, "splits_sum_invalid");
+        await response.ShouldBeProblemAsync(HttpStatusCode.BadRequest, "splits_sum_invalid", ct);
     }
 }
 ```

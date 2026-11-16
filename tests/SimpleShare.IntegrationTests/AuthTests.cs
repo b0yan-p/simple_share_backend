@@ -22,7 +22,7 @@ public sealed class AuthTests(ApiFixture fixture)
     {
         // Arrange
         var ct = TestContext.Current.CancellationToken;
-        var (_, user) = await fixture.RegisterAsync(ct);
+        var (_, user) = await fixture.CreateAuthenticatedClientAsync(ct, withPassword: true);
         var client = fixture.CreateClient();
 
         // Act
@@ -46,7 +46,7 @@ public sealed class AuthTests(ApiFixture fixture)
     {
         // Arrange
         var ct = TestContext.Current.CancellationToken;
-        var (_, user) = await fixture.RegisterAsync(ct);
+        var (_, user) = await fixture.CreateAuthenticatedClientAsync(ct, withPassword: true);
         var client = fixture.CreateClient();
 
         // Act
@@ -156,7 +156,7 @@ public sealed class AuthTests(ApiFixture fixture)
     {
         // Arrange
         var ct = TestContext.Current.CancellationToken;
-        var (_, user) = await fixture.RegisterAsync(ct, firstName: "Local", lastName: "Account");
+        var (_, user) = await fixture.CreateAuthenticatedClientAsync(ct, firstName: "Local", lastName: "Account", withPassword: true);
         var client = fixture.CreateClient();
 
         // Act
@@ -280,11 +280,11 @@ public sealed class AuthTests(ApiFixture fixture)
     // ----------------------------------------------------------- token handling
 
     [Fact] // AUTH-11
-    public async Task AuthenticatedRoute_WithTokenFromRegister_ReturnsOk()
+    public async Task AuthenticatedRoute_WithTokenFromSession_ReturnsOk()
     {
         // Arrange
         var ct = TestContext.Current.CancellationToken;
-        var (client, _) = await fixture.RegisterAsync(ct);
+        var (client, _) = await fixture.CreateAuthenticatedClientAsync(ct);
 
         // Act
         var response = await client.GetAsync("/api/UserConnection", ct);
@@ -300,7 +300,7 @@ public sealed class AuthTests(ApiFixture fixture)
     {
         // Arrange
         var ct = TestContext.Current.CancellationToken;
-        var (_, user) = await fixture.RegisterAsync(ct);
+        var (_, user) = await fixture.CreateAuthenticatedClientAsync(ct);
         var client = fixture.CreateClient();
         client.UseBearer(TamperSignature(user.Token));
 
@@ -316,7 +316,7 @@ public sealed class AuthTests(ApiFixture fixture)
     {
         // Arrange
         var ct = TestContext.Current.CancellationToken;
-        var (_, user) = await fixture.RegisterAsync(ct);
+        var (_, user) = await fixture.CreateAuthenticatedClientAsync(ct);
         var client = fixture.CreateClient();
         // Minted rather than obtained, because expiry cannot be reached any other
         // way - TokenService issues 7-day tokens. Backdated well past the 2-minute

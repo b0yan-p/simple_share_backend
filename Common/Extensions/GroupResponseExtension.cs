@@ -11,6 +11,7 @@ public static class GroupResponseExtension
         {
             Id = group.Id,
             Type = group.Type,
+            CoverImageKey = group.CoverImageKey,
             Name = group.Name,
             Currency = group.Currency,
             SimplifyDebts = group.SimplifyDebts,

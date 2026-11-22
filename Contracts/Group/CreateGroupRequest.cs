@@ -7,6 +7,7 @@ public class CreateGroupRequest
 {
     [EnumDataType(typeof(GroupType))]
     public GroupType Type { get; set; }
+    public string? CoverImageKey { get; set; }
     [Required]
     [MaxLength(48)]
     public required string Name { get; set; } = string.Empty;

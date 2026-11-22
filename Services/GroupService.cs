@@ -3,6 +3,7 @@ using simpleShare_backend.Common;
 using simpleShare_backend.Common.Currencies;
 using simpleShare_backend.Common.Exceptions;
 using simpleShare_backend.Common.Extensions;
+using simpleShare_backend.Common.Groups;
 using simpleShare_backend.Common.Security;
 using simpleShare_backend.Contracts.Balances;
 using simpleShare_backend.Contracts.Group;
@@ -30,6 +31,9 @@ public class GroupService(
         {
             Id = Guid.NewGuid(),
             Type = request.Type,
+            CoverImageKey = request.CoverImageKey is null
+                ? GroupCoverCatalog.DefaultFor(request.Type)
+                : GroupCoverCatalog.Validate(request.Type, request.CoverImageKey),
             Name = request.Name,
             Currency = CurrencyCatalog.Validate(request.Currency),
             SimplifyDebts = request.SimplifyDebts ?? false,
@@ -103,7 +107,12 @@ public class GroupService(
                 group.Currency = currency;
             }
         }
-        if (request.Type.HasValue) group.Type = request.Type.Value;
+        var type = request.Type ?? group.Type;
+        if (request.CoverImageKey is not null)
+            group.CoverImageKey = GroupCoverCatalog.Validate(type, request.CoverImageKey);
+        else if (type != group.Type)
+            group.CoverImageKey = GroupCoverCatalog.DefaultFor(type);
+        group.Type = type;
         if (request.Name is not null)
         {
             if (string.IsNullOrWhiteSpace(request.Name)) throw new ValidationAppException("invalid_request", "Name is required.");
@@ -143,6 +152,7 @@ public class GroupService(
             Id = group.Id,
             Name = group.Name,
             Type = group.Type,
+            CoverImageKey = group.CoverImageKey,
             Currency = group.Currency,
             SimplifyDebts = group.SimplifyDebts,
         };
@@ -194,6 +204,7 @@ public class GroupService(
                 g.Id,
                 g.Name,
                 g.Type,
+                g.CoverImageKey,
                 g.Currency,
                 CurrencyLocked = g.Expenses.Any(),
                 IsOwner = g.GroupMembers.Any(gm => gm.MemberId == myMemberId && gm.GroupRole == GroupRole.Owner),
@@ -218,6 +229,7 @@ public class GroupService(
                     Id = g.Id,
                     Name = g.Name,
                     Type = g.Type,
+                    CoverImageKey = g.CoverImageKey,
                     Currency = g.Currency,
                     CurrencyLocked = g.CurrencyLocked,
                     CanChangeCurrency = !g.CurrencyLocked && g.IsOwner,
@@ -260,6 +272,7 @@ public class GroupService(
                 g.Id,
                 g.Name,
                 g.Type,
+                g.CoverImageKey,
                 g.Currency,
                 CurrencyLocked = g.Expenses.Any(),
                 IsOwner = g.GroupMembers.Any(gm => gm.MemberId == myMemberId && gm.GroupRole == GroupRole.Owner),
@@ -292,6 +305,7 @@ public class GroupService(
                     Id = g.Id,
                     Name = g.Name,
                     Type = g.Type,
+                    CoverImageKey = g.CoverImageKey,
                     Currency = g.Currency,
                     CurrencyLocked = g.CurrencyLocked,
                     CanChangeCurrency = !g.CurrencyLocked && g.IsOwner,
@@ -341,6 +355,7 @@ public class GroupService(
             Id = group.Id,
             Name = group.Name,
             Type = group.Type,
+            CoverImageKey = group.CoverImageKey,
             Currency = group.Currency,
             MyDebtSummary = new MySummaryResponse(),
             MemberCount = memberCount,

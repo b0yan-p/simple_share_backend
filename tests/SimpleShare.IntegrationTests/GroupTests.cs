@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using Shouldly;
+using simpleShare_backend.Models.Enums;
 using simpleShare_backend.Contracts.Group;
 
 namespace SimpleShare.IntegrationTests;
@@ -25,8 +26,51 @@ public sealed class GroupTests(ApiFixture fixture)
         group.ShouldNotBeNull();
         group.Id.ShouldNotBe(Guid.Empty);
         group.Name.ShouldBe("Trip");
+        group.Type.ShouldBe(GroupType.Other);
         group.SimplifyDebts.ShouldBeFalse();
         group.DeletedAt.ShouldBeNull();
+    }
+
+    [Theory]
+    [InlineData(GroupType.Other)]
+    [InlineData(GroupType.Trip)]
+    [InlineData(GroupType.Roommates)]
+    [InlineData(GroupType.Couple)]
+    public async Task GroupTypeRoundTripsAcrossGroupEndpoints(GroupType type)
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var (client, _) = await fixture.CreateAuthenticatedClientAsync(ct);
+        var created = await client.PostAsJsonAsync("/api/Group", new { Name = "Shared", Currency = "EUR", Type = type }, ct);
+        created.EnsureSuccessStatusCode();
+        var group = (await created.Content.ReadFromJsonAsync<GroupResponse>(ct))!;
+        group.Type.ShouldBe(type);
+
+        var renamed = await client.PutAsJsonAsync("/api/Group", new { group.Id, Name = "Renamed" }, ct);
+        renamed.EnsureSuccessStatusCode();
+        (await client.GetMyGroupsAsync(ct)).Data.Single().Type.ShouldBe(type);
+        var recent = await client.GetFromJsonAsync<List<GroupResponse>>("/api/Group/recent", ct);
+        recent!.Single().Type.ShouldBe(type);
+        var overview = await client.GetFromJsonAsync<GroupOverviewResponse>($"/api/Group/{group.Id}/overview", ct);
+        overview!.Type.ShouldBe(type);
+
+        var changedType = type == GroupType.Trip ? GroupType.Other : GroupType.Trip;
+        var updated = await client.PutAsJsonAsync("/api/Group", new { group.Id, Type = changedType }, ct);
+        updated.EnsureSuccessStatusCode();
+        var saved = await client.GetFromJsonAsync<GroupResponse>($"/api/Group/{group.Id}", ct);
+        saved!.Type.ShouldBe(changedType);
+    }
+
+    [Fact]
+    public async Task InvalidGroupTypeIsRejectedOnCreateAndUpdate()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var (client, _) = await fixture.CreateAuthenticatedClientAsync(ct);
+        var invalid = await client.PostAsJsonAsync("/api/Group", new { Name = "Shared", Currency = "EUR", Type = 99 }, ct);
+        invalid.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+
+        var group = await client.CreateGroupAsync("Shared", ct);
+        invalid = await client.PutAsJsonAsync("/api/Group", new { group.Id, Type = -1 }, ct);
+        invalid.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
     }
 
     [Fact] // GRP-02

@@ -35,6 +35,8 @@ public class CurrencyMigrationTests(ApiFixture fixture)
             await db.Database.ExecuteSqlInterpolatedAsync($"INSERT INTO \"ExpenseSplits\" (\"ExpenseId\",\"OwedByMemberId\",\"Amount\",\"CreatedAt\") VALUES ({expense},{member},10.0051,{date})", ct);
             await migrator.MigrateAsync(null, ct);
             var row = await db.Expenses.Include(x => x.Payments).Include(x => x.Splits).Include(x => x.Group).SingleAsync(ct);
+            row.Group.Type.ShouldBe(simpleShare_backend.Models.Enums.GroupType.Other);
+            row.Group.CoverImageKey.ShouldBeNull();
             row.TotalAmount.ShouldBe(10.0051m); row.OriginalAmount.ShouldBe(10.0051m);
             row.ExpenseDate.ShouldBe(date); row.DeletedAt.ShouldBe(date); row.IsSettleUp.ShouldBe(true);
             row.OriginalCurrency.ShouldBe("BAM"); row.Group.Currency.ShouldBe("BAM"); row.ExchangeRate.ShouldBe(1m); row.ExchangeRateDate.ShouldBeNull();

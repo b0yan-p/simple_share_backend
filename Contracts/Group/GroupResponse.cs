@@ -1,7 +1,9 @@
+using simpleShare_backend.Models.Enums;
 namespace simpleShare_backend.Contracts.Group;
 
 public class GroupResponse
 {
+    public GroupType Type { get; set; }
     public bool CurrencyLocked { get; set; }
     public bool CanChangeCurrency { get; set; }
     public string Currency { get; set; } = "";

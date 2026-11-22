@@ -1,9 +1,12 @@
+using simpleShare_backend.Models.Enums;
 using System.ComponentModel.DataAnnotations;
 
 namespace simpleShare_backend.Contracts.Group;
 
 public class CreateGroupRequest
 {
+    [EnumDataType(typeof(GroupType))]
+    public GroupType Type { get; set; }
     [Required]
     [MaxLength(48)]
     public required string Name { get; set; } = string.Empty;

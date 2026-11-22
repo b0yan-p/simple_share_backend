@@ -10,6 +10,7 @@ public static class GroupResponseExtension
         return new GroupResponse
         {
             Id = group.Id,
+            Type = group.Type,
             Name = group.Name,
             Currency = group.Currency,
             SimplifyDebts = group.SimplifyDebts,

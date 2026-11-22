@@ -29,6 +29,7 @@ public class GroupService(
         var newGroup = new Group
         {
             Id = Guid.NewGuid(),
+            Type = request.Type,
             Name = request.Name,
             Currency = CurrencyCatalog.Validate(request.Currency),
             SimplifyDebts = request.SimplifyDebts ?? false,
@@ -102,6 +103,7 @@ public class GroupService(
                 group.Currency = currency;
             }
         }
+        if (request.Type.HasValue) group.Type = request.Type.Value;
         if (request.Name is not null)
         {
             if (string.IsNullOrWhiteSpace(request.Name)) throw new ValidationAppException("invalid_request", "Name is required.");
@@ -140,6 +142,7 @@ public class GroupService(
         {
             Id = group.Id,
             Name = group.Name,
+            Type = group.Type,
             Currency = group.Currency,
             SimplifyDebts = group.SimplifyDebts,
         };
@@ -190,6 +193,7 @@ public class GroupService(
             {
                 g.Id,
                 g.Name,
+                g.Type,
                 g.Currency,
                 CurrencyLocked = g.Expenses.Any(),
                 IsOwner = g.GroupMembers.Any(gm => gm.MemberId == myMemberId && gm.GroupRole == GroupRole.Owner),
@@ -213,6 +217,7 @@ public class GroupService(
                 {
                     Id = g.Id,
                     Name = g.Name,
+                    Type = g.Type,
                     Currency = g.Currency,
                     CurrencyLocked = g.CurrencyLocked,
                     CanChangeCurrency = !g.CurrencyLocked && g.IsOwner,
@@ -254,6 +259,7 @@ public class GroupService(
             {
                 g.Id,
                 g.Name,
+                g.Type,
                 g.Currency,
                 CurrencyLocked = g.Expenses.Any(),
                 IsOwner = g.GroupMembers.Any(gm => gm.MemberId == myMemberId && gm.GroupRole == GroupRole.Owner),
@@ -285,6 +291,7 @@ public class GroupService(
                 {
                     Id = g.Id,
                     Name = g.Name,
+                    Type = g.Type,
                     Currency = g.Currency,
                     CurrencyLocked = g.CurrencyLocked,
                     CanChangeCurrency = !g.CurrencyLocked && g.IsOwner,
@@ -333,6 +340,7 @@ public class GroupService(
         {
             Id = group.Id,
             Name = group.Name,
+            Type = group.Type,
             Currency = group.Currency,
             MyDebtSummary = new MySummaryResponse(),
             MemberCount = memberCount,

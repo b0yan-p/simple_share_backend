@@ -167,6 +167,10 @@ namespace simpleShare_backend.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
+                    b.Property<string>("CoverImageKey")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -187,6 +191,11 @@ namespace simpleShare_backend.Migrations
 
                     b.Property<bool>("SimplifyDebts")
                         .HasColumnType("boolean");
+
+                    b.Property<short>("Type")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("smallint")
+                        .HasDefaultValue((short)0);
 
                     b.HasKey("Id");
 

@@ -91,6 +91,8 @@ public class ApplicationDbContext(DbContextOptions dbContextOptions)
 
         #endregion
 
+        builder.Entity<Group>().Property(x => x.Type).HasColumnType("smallint").HasDefaultValue(GroupType.Other);
+        builder.Entity<Group>().Property(x => x.CoverImageKey).HasMaxLength(64);
         builder.Entity<Group>().Property(x => x.Currency).HasMaxLength(3).IsRequired();
         builder.Entity<Expense>().Property(x => x.OriginalCurrency).HasMaxLength(3).IsRequired();
         builder.Entity<Expense>().Property(x => x.OriginalAmount).HasPrecision(19, 4);

@@ -2,6 +2,7 @@ namespace simpleShare_backend.Contracts.Group;
 
 public class GroupOverviewResponse
 {
+    public string Currency { get; set; } = "";
     public Guid Id { get; set; }
     public string Name { get; set; } = string.Empty;
     public MySummaryResponse MyDebtSummary { get; set; } = default!;

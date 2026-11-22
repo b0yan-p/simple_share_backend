@@ -22,7 +22,8 @@ public class ActivityService(
     public ActivityEvent<ExpenseUpdatedActivityData> AddExpenseUpdatedActivity(
         Expense oldExpense,
         Expense newExpense,
-        Guid ActorMemberId
+        Guid ActorMemberId,
+        bool allocationsChanged = false
     )
     {
         var descBefore = oldExpense.Description;
@@ -31,9 +32,12 @@ public class ActivityService(
         var amountBefore = oldExpense.TotalAmount;
         var amountAfter = newExpense.TotalAmount;
 
-        var changedFields = new List<string>(2);
+        var changedFields = new List<string>(5);
+        if (allocationsChanged) changedFields.Add("allocations");
 
-        if (amountBefore != amountAfter)
+        if (oldExpense.OriginalCurrency != newExpense.OriginalCurrency) changedFields.Add("currency");
+        if (DateOnly.FromDateTime(oldExpense.ExpenseDate) != DateOnly.FromDateTime(newExpense.ExpenseDate)) changedFields.Add("date");
+        if (amountBefore != amountAfter || oldExpense.OriginalAmount != newExpense.OriginalAmount)
             changedFields.Add("amount");
 
         if (string.CompareOrdinal(descBefore, descAfter) != 0)

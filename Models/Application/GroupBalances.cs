@@ -2,6 +2,7 @@ namespace simpleShare_backend.Models.Application;
 
 public class GroupBalances
 {
+    public string Currency { get; set; } = "";
     public Guid GroupId { get; init; }
     public IReadOnlyList<MemberBalance> Members { get; init; } = [];
     public IReadOnlyList<DebtEdge> Debts { get; set; } = [];

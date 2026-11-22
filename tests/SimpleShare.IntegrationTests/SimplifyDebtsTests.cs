@@ -78,7 +78,7 @@ public sealed class SimplifyDebtsTests(ApiFixture fixture)
         await SetMode(client, group.Id, true, ct);
         (await client.GetBalancesAsync(group.Id, ct)).ShouldOwe(a, c, 10);
         var payment = await client.PostAsJsonAsync($"/api/Expense/{group.Id}/settleUp", new
-        { FromMemberId = a, ToMemberId = c, Amount = amount, Date = DateTime.UtcNow }, ct);
+        { FromMemberId = a, ToMemberId = c, Amount = amount, Date = DateOnly.FromDateTime(DateTime.UtcNow) }, ct);
         payment.StatusCode.ShouldBe(HttpStatusCode.NoContent, await payment.Content.ReadAsStringAsync(ct));
         foreach (var mode in new[] { false, true, false, true })
         {
@@ -122,7 +122,7 @@ public sealed class SimplifyDebtsTests(ApiFixture fixture)
         var me = await client.MyMemberIdAsync(group.Id, ct);
         var b = await client.AddVirtualMemberAsync(group.Id, "B", ct);
         var c = await client.AddVirtualMemberAsync(group.Id, "C", ct);
-        await client.AddExpenseAsync(group.Id, ApiExtensions.ExpenseBody("Fraction", 10.005m, me, [(b, 5.0025m), (c, 5.0025m)]), ct);
+        await fixture.InsertLegacyExpenseAsync(group.Id, "Fraction", 10.005m, me, [(b, 5.0025m), (c, 5.0025m)], ct);
         foreach (var mode in new[] { false, true })
         {
             await SetMode(client, group.Id, mode, ct);

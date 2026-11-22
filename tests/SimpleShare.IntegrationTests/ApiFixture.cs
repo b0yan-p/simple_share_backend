@@ -64,6 +64,9 @@ public sealed class ApiFixture : WebApplicationFactory<Program>, IAsyncLifetime
         // No outbound email in tests. Google validation is isolated separately.
         builder.ConfigureTestServices(services =>
         {
+            services.RemoveAll<IExchangeRateProvider>();
+            services.AddSingleton<RecordingExchangeRateProvider>();
+            services.AddSingleton<IExchangeRateProvider>(sp => sp.GetRequiredService<RecordingExchangeRateProvider>());
             services.RemoveAll<IEmailService>();
             services.RemoveAll<IResend>();
             services.AddSingleton<RecordingEmailService>();

@@ -23,3 +23,5 @@ public sealed class ValidationAppException(
 {
     public IDictionary<string, string[]>? Errors { get; } = errors;
 }
+public sealed class ExchangeRateUnavailableException() : AppException("exchange_rate_provider_unavailable", "Exchange rates are temporarily unavailable. Please retry.");
+public sealed class ExchangeRateInvalidResponseException() : AppException("exchange_rate_response_invalid", "The exchange-rate provider returned invalid data. Please retry.");

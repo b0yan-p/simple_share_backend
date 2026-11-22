@@ -21,8 +21,7 @@ public class BalanceController(IBalanceService service) : ControllerBase
 
         return new OverallBalanceResponse
         {
-            OwedToMeTotal = balance.OwedToMeTotal,
-            IOweTotal = balance.IOweTotal,
+            Balances = balance.Balances,
             GroupCount = balance.GroupCount,
         };
     }

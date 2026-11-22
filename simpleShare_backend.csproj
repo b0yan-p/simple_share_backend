@@ -31,4 +31,5 @@
     <EmbeddedResource Remove="tests/**" />
   </ItemGroup>
 
+  <ItemGroup><EmbeddedResource Include="Common/Currencies/fiat-currencies.json" /></ItemGroup>
 </Project>

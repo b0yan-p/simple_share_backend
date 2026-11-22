@@ -76,6 +76,9 @@ public class GlobalExceptionHandler(
     private static (int status, string title, string code, IDictionary<string, string[]>? errors)
        MapException(Exception ex)
     {
+        if (ex is ExchangeRateUnavailableException unavailable) return (503, "Exchange rates unavailable", unavailable.Code, null);
+        if (ex is ExchangeRateInvalidResponseException invalid) return (502, "Invalid exchange-rate response", invalid.Code, null);
+
         // 1) Your domain exceptions
         if (ex is ValidationAppException vex)
             return (StatusCodes.Status400BadRequest, "Validation failed", vex.Code, vex.Errors);

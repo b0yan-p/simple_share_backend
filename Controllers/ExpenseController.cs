@@ -17,7 +17,7 @@ public class ExpenseController(IExpenseService service) : ControllerBase
     [Route("{groupId}")]
     public async Task<ExpenseResponse> AddExpenseAsync(
         [FromRoute] Guid groupId,
-        [FromBody] CreateExpenseRequest request
+        [FromBody] CreateExpenseRequest request, CancellationToken cancellationToken
     )
     {
         if (!ModelState.IsValid)
@@ -25,7 +25,7 @@ public class ExpenseController(IExpenseService service) : ControllerBase
             throw new ValidationAppException("invalid_request", "Invalid request data");
         }
 
-        var result = await service.SaveExpenseAsync(groupId, request, User!.GetUserId());
+        var result = await service.SaveExpenseAsync(groupId, request, User!.GetUserId(), cancellationToken);
         return result;
     }
 
@@ -51,13 +51,13 @@ public class ExpenseController(IExpenseService service) : ControllerBase
     [Route("{groupId}")]
     public async Task<ExpenseResponse> UpdateExpenseAsync(
         [FromRoute] Guid groupId,
-        UpdateExpenseRequest request
+        UpdateExpenseRequest request, CancellationToken cancellationToken
     )
     {
         if (!ModelState.IsValid)
             throw new ValidationAppException("invalid_request", "Invalid input");
 
-        return await service.UpdateExpenseAsync(groupId, request, User.GetUserId());
+        return await service.UpdateExpenseAsync(groupId, request, User.GetUserId(), cancellationToken);
     }
 
     [HttpDelete]
@@ -71,12 +71,12 @@ public class ExpenseController(IExpenseService service) : ControllerBase
 
     [HttpPost]
     [Route("{groupId}/settleUp")]
-    public async Task<IActionResult> SettleUpDebtAsync([FromRoute] Guid groupId, SettleUpRequest request)
+    public async Task<IActionResult> SettleUpDebtAsync([FromRoute] Guid groupId, SettleUpRequest request, CancellationToken cancellationToken)
     {
         if (!ModelState.IsValid)
             throw new ValidationAppException("invalid_request", "Invalid request!");
 
-        var result = await service.SettleUpDebtAsync(groupId, request, User.GetUserId());
+        var result = await service.SettleUpDebtAsync(groupId, request, User.GetUserId(), cancellationToken);
 
         if (!result)
             return NotFound();

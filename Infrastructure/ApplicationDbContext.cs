@@ -91,6 +91,13 @@ public class ApplicationDbContext(DbContextOptions dbContextOptions)
 
         #endregion
 
+        builder.Entity<Group>().Property(x => x.Currency).HasMaxLength(3).IsRequired();
+        builder.Entity<Expense>().Property(x => x.OriginalCurrency).HasMaxLength(3).IsRequired();
+        builder.Entity<Expense>().Property(x => x.OriginalAmount).HasPrecision(19, 4);
+        builder.Entity<Expense>().Property(x => x.ExchangeRate).HasPrecision(28, 12);
+        builder.Entity<ExpensePayment>().Property(x => x.OriginalAmount).HasPrecision(19, 4);
+        builder.Entity<ExpenseSplit>().Property(x => x.OriginalAmount).HasPrecision(19, 4);
+
         #region Expenses
 
         builder.Entity<Expense>()

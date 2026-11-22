@@ -6,6 +6,11 @@ namespace simpleShare_backend.Models.Domain;
 
 public class Expense : BaseModel<Guid>, IDeletable, ICreatable, IModifiable
 {
+    public byte[]? CreateFingerprint { get; set; }
+    public decimal OriginalAmount { get; set; }
+    public string OriginalCurrency { get; set; } = string.Empty;
+    public decimal ExchangeRate { get; set; } = 0m;
+    public DateOnly? ExchangeRateDate { get; set; }
     public Guid GroupId { get; set; }
     [Required]
     [MaxLength(200)]

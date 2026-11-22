@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using simpleShare_backend.Common;
+using simpleShare_backend.Common.Currencies;
 using simpleShare_backend.Common.Exceptions;
 using simpleShare_backend.Common.Extensions;
 using simpleShare_backend.Common.Security;
@@ -29,6 +30,7 @@ public class GroupService(
         {
             Id = Guid.NewGuid(),
             Name = request.Name,
+            Currency = CurrencyCatalog.Validate(request.Currency),
             SimplifyDebts = request.SimplifyDebts ?? false,
             CreatedAt = DateTime.UtcNow,
         };
@@ -77,26 +79,39 @@ public class GroupService(
 
         await repo.SaveChangesAsync();
 
-        return response.ToResponse();
+        var result = response.ToResponse();
+        result.CanChangeCurrency = true;
+        return result;
     }
 
-    public async Task<GroupResponse> UpdateGroupAsync(CreateGroupRequest request)
+    public async Task<GroupResponse> UpdateGroupAsync(UpdateGroupRequest request, Guid userId)
     {
-        if (request.Id == null)
-            throw new ValidationAppException("invalid_request", "Group ID is required for update.");
-
-        var dbGroup =
-            await repo.GetByIdAsync<Group, Guid>(request.Id.Value, null)
-            ?? throw new NotFoundAppException("group_not_found", "Group is not found");
-
-        dbGroup.ModifiedAt = DateTime.UtcNow;
-        dbGroup.Name = request.Name;
-        dbGroup.SimplifyDebts = request.SimplifyDebts ?? dbGroup.SimplifyDebts;
-
-        var response = await repo.UpdateAsync<Group, Guid>(dbGroup);
-        await repo.SaveChangesAsync();
-
-        return response.ToResponse();
+        await using var tx = await db.Database.BeginTransactionAsync();
+        var group = await db.Groups.FromSqlInterpolated($"SELECT * FROM \"Groups\" WHERE \"Id\" = {request.Id} AND \"DeletedAt\" IS NULL FOR UPDATE")
+            .SingleOrDefaultAsync() ?? throw new NotFoundAppException("group_not_found", "Group not found.");
+        await db.Entry(group).ReloadAsync();
+        var membership = await db.GroupMembers.AsNoTracking().FirstOrDefaultAsync(x => x.GroupId == group.Id && x.Member.UserId == userId && x.LeftAt == null && x.GroupMemberStatus != GroupMemberStatus.Deleted)
+            ?? throw new ForbiddenAppException("not_group_member", "Not an active group member.");
+        if (request.Currency is not null)
+        {
+            var currency = CurrencyCatalog.Validate(request.Currency);
+            if (currency != group.Currency)
+            {
+                if (membership.GroupRole != GroupRole.Owner) throw new ForbiddenAppException("group_currency_owner_required", "Only the group owner may change its currency.");
+                if (await db.Expenses.AnyAsync(x => x.GroupId == group.Id)) throw new ConflictAppException("group_currency_locked", "Currency is locked after the first expense or settlement.");
+                group.Currency = currency;
+            }
+        }
+        if (request.Name is not null)
+        {
+            if (string.IsNullOrWhiteSpace(request.Name)) throw new ValidationAppException("invalid_request", "Name is required.");
+            group.Name = request.Name.Trim();
+        }
+        group.SimplifyDebts = request.SimplifyDebts ?? group.SimplifyDebts;
+        group.ModifiedAt = DateTime.UtcNow;
+        await db.SaveChangesAsync();
+        await tx.CommitAsync();
+        return await GetGroupAsync(group.Id, userId);
     }
 
     public async Task<GroupResponse> DeleteGroupAsync(Guid id)
@@ -115,7 +130,7 @@ public class GroupService(
         return group.ToResponse();
     }
 
-    public async Task<GroupResponse> GetGroupAsync(Guid id)
+    public async Task<GroupResponse> GetGroupAsync(Guid id, Guid? userId = null)
     {
         var group =
             await repo.GetByIdAsync<Group, Guid>(id)
@@ -125,9 +140,12 @@ public class GroupService(
         {
             Id = group.Id,
             Name = group.Name,
+            Currency = group.Currency,
             SimplifyDebts = group.SimplifyDebts,
         };
 
+        response.CurrencyLocked = await db.Expenses.AnyAsync(x => x.GroupId == id);
+        response.CanChangeCurrency = !response.CurrencyLocked && userId != null && await db.GroupMembers.AnyAsync(x => x.GroupId == id && x.Member.UserId == userId && x.LeftAt == null && x.GroupMemberStatus != GroupMemberStatus.Deleted && x.GroupRole == GroupRole.Owner);
         return response;
     }
 
@@ -172,6 +190,9 @@ public class GroupService(
             {
                 g.Id,
                 g.Name,
+                g.Currency,
+                CurrencyLocked = g.Expenses.Any(),
+                IsOwner = g.GroupMembers.Any(gm => gm.MemberId == myMemberId && gm.GroupRole == GroupRole.Owner),
                 g.SimplifyDebts,
                 g.CreatedAt,
                 g.DeletedAt,
@@ -192,6 +213,9 @@ public class GroupService(
                 {
                     Id = g.Id,
                     Name = g.Name,
+                    Currency = g.Currency,
+                    CurrencyLocked = g.CurrencyLocked,
+                    CanChangeCurrency = !g.CurrencyLocked && g.IsOwner,
                     SimplifyDebts = g.SimplifyDebts,
                     CreatedAt = g.CreatedAt,
                     DeletedAt = g.DeletedAt,
@@ -230,6 +254,9 @@ public class GroupService(
             {
                 g.Id,
                 g.Name,
+                g.Currency,
+                CurrencyLocked = g.Expenses.Any(),
+                IsOwner = g.GroupMembers.Any(gm => gm.MemberId == myMemberId && gm.GroupRole == GroupRole.Owner),
                 g.SimplifyDebts,
                 g.CreatedAt,
                 g.ModifiedAt,
@@ -258,6 +285,9 @@ public class GroupService(
                 {
                     Id = g.Id,
                     Name = g.Name,
+                    Currency = g.Currency,
+                    CurrencyLocked = g.CurrencyLocked,
+                    CanChangeCurrency = !g.CurrencyLocked && g.IsOwner,
                     SimplifyDebts = g.SimplifyDebts,
                     CreatedAt = g.CreatedAt,
                     DeletedAt = g.DeletedAt,
@@ -282,6 +312,7 @@ public class GroupService(
         return new()
         {
             GroupId = groupId,
+            Currency = _.Currency,
             CurrentMemberId = member.Id,
             Members = result.Members,
             Debts = result.Debts,
@@ -302,6 +333,7 @@ public class GroupService(
         {
             Id = group.Id,
             Name = group.Name,
+            Currency = group.Currency,
             MyDebtSummary = new MySummaryResponse(),
             MemberCount = memberCount,
             CurrentMemberId = member.Id,

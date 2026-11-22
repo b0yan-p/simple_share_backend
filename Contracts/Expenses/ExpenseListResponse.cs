@@ -5,9 +5,13 @@ namespace simpleShare_backend.Contracts.Expenses;
 
 public class ExpenseListResponse
 {
+    public string GroupCurrency { get; set; } = "";
+    public decimal OriginalAmount { get; set; }
+    public string OriginalCurrency { get; set; } = "";
+
     public Guid Id { get; set; }
     public string Description { get; set; } = string.Empty;
-    public DateTime ExpenseDate { get; set; }
+    public DateOnly ExpenseDate { get; set; }
     public decimal Amount { get; set; }
     public decimal Net { get; set; }
     public bool IsSettleUp { get; set; }

@@ -25,6 +25,7 @@ public class BalanceService(ApplicationDbContext db, IMemberService memberServic
         return new GroupBalances
         {
             GroupId = groupId,
+            Currency = group.Currency,
             Members = group.Members.OrderByDescending(x => x.MemberId == member.Id)
                 .ThenByDescending(x => x.Net).ThenBy(x => x.MemberId).ToArray(),
             Debts = group.Debts
@@ -41,7 +42,7 @@ public class BalanceService(ApplicationDbContext db, IMemberService memberServic
         await using var snapshot = ownsTransaction
             ? await db.Database.BeginTransactionAsync(IsolationLevel.RepeatableRead, ct) : null;
         var groups = await db.Groups.AsNoTracking().Where(x => groupIds.Contains(x.Id) && x.DeletedAt == null)
-            .Select(x => new { x.Id, x.SimplifyDebts }).ToListAsync(ct);
+            .Select(x => new { x.Id, x.SimplifyDebts, x.Currency }).ToListAsync(ct);
         var ids = groups.Select(x => x.Id).ToArray();
         var expenses = await db.Expenses.AsNoTracking().Where(x => ids.Contains(x.GroupId) && x.DeletedAt == null)
             .Select(x => new { x.Id, x.GroupId, x.TotalAmount }).ToListAsync(ct);
@@ -100,6 +101,7 @@ public class BalanceService(ApplicationDbContext db, IMemberService memberServic
                 result[group.Id] = new GroupBalances
                 {
                     GroupId = group.Id,
+                    Currency = group.Currency,
                     Members = calculated.Members.Select(x => new MemberBalance
                     {
                         MemberId = x.Id, DisplayName = names[x.Id], Paid = x.Paid / 100m, Owed = x.Owed / 100m,
@@ -175,13 +177,18 @@ public class BalanceService(ApplicationDbContext db, IMemberService memberServic
             .Select(x => x.GroupId).ToArrayAsync(ct);
         var groups = await GetGroupsBalancesAsync(ids, ct);
         var result = new OverallBalance();
+        var buckets = new SortedDictionary<string, CurrencyBalance>(StringComparer.Ordinal);
         foreach (var group in groups.Values)
         {
             var relevant = group.Debts.Where(x => x.DebtorMemberId == member.Id || x.CreditorMemberId == member.Id).ToArray();
-            result.OwedToMeTotal += relevant.Where(x => x.CreditorMemberId == member.Id).Sum(x => x.Amount);
-            result.IOweTotal += relevant.Where(x => x.DebtorMemberId == member.Id).Sum(x => x.Amount);
+            if (relevant.Length == 0) continue;
+            if (!buckets.TryGetValue(group.Currency, out var bucket)) buckets[group.Currency] = bucket = new CurrencyBalance { Currency = group.Currency };
+            bucket.GroupCount++;
+            bucket.OwedToMeTotal += relevant.Where(x => x.CreditorMemberId == member.Id).Sum(x => x.Amount);
+            bucket.IOweTotal += relevant.Where(x => x.DebtorMemberId == member.Id).Sum(x => x.Amount);
             if (relevant.Length > 0) result.GroupCount++;
         }
+        result.Balances = buckets.Values.ToArray();
         return result;
     }
 

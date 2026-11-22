@@ -38,7 +38,7 @@ public sealed class SimplifyDebtsPhase3Tests(ApiFixture fixture)
     private static async Task Pay(HttpClient client, Guid group, Guid from, Guid to, decimal amount, CancellationToken ct)
     {
         var response = await client.PostAsJsonAsync($"/api/Expense/{group}/settleUp", new
-        { FromMemberId = from, ToMemberId = to, Amount = amount, Date = DateTime.UtcNow }, ct);
+        { FromMemberId = from, ToMemberId = to, Amount = amount, Date = DateOnly.FromDateTime(DateTime.UtcNow) }, ct);
         response.StatusCode.ShouldBe(HttpStatusCode.NoContent, await response.Content.ReadAsStringAsync(ct));
     }
 

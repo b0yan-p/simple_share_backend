@@ -120,7 +120,7 @@ public sealed class OverallBalanceTests(ApiFixture fixture)
                 FromMemberId = debtor,
                 ToMemberId = me,
                 Amount = 10m,
-                Date = DateTime.UtcNow,
+                Date = DateOnly.FromDateTime(DateTime.UtcNow),
             }, ct);
 
             settled.StatusCode.ShouldBe(

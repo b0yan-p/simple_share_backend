@@ -4,6 +4,7 @@ namespace simpleShare_backend.Models.Domain;
 
 public class ExpenseSplit : ICreatable
 {
+    public decimal OriginalAmount { get; set; }
     public Guid ExpenseId { get; set; }
     public Guid OwedByMemberId { get; set; }
 

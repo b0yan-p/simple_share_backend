@@ -70,12 +70,12 @@ public class BalanceLedgerTests
     }
 
     [Theory]
-    [InlineData("{\"Name\":\"Renamed\"}", null)]
-    [InlineData("{\"Name\":\"Renamed\",\"SimplifyDebts\":true}", true)]
-    [InlineData("{\"Name\":\"Renamed\",\"SimplifyDebts\":false}", false)]
+    [InlineData("{\"Id\":\"00000000-0000-0000-0000-000000000001\",\"Name\":\"Renamed\"}", null)]
+    [InlineData("{\"Id\":\"00000000-0000-0000-0000-000000000001\",\"Name\":\"Renamed\",\"SimplifyDebts\":true}", true)]
+    [InlineData("{\"Id\":\"00000000-0000-0000-0000-000000000001\",\"Name\":\"Renamed\",\"SimplifyDebts\":false}", false)]
     public void SettingsDistinguishOmittedAndExplicitValues(string json, bool? expected)
     {
-        Assert.Equal(expected, JsonSerializer.Deserialize<CreateGroupRequest>(json)!.SimplifyDebts);
+        Assert.Equal(expected, JsonSerializer.Deserialize<UpdateGroupRequest>(json)!.SimplifyDebts);
     }
 
     [Fact]

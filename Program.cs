@@ -124,6 +124,11 @@ builder.Services.AddScoped<IGroupMemberService, GroupMemberService>();
 builder.Services.AddScoped<IUserConnectionService, UserConnectionService>();
 builder.Services.AddScoped<IGroupMemberManagementService, GroupMemberManagementService>();
 builder.Services.AddScoped<IGroupInvitationService, GroupInvitationService>();
+builder.Services.AddHttpClient<IExchangeRateProvider, FrankfurterExchangeRateProvider>(client =>
+{
+    client.BaseAddress = new Uri(builder.Configuration["ExchangeRates:BaseUrl"] ?? "https://api.frankfurter.dev/");
+    client.Timeout = TimeSpan.FromSeconds(10);
+});
 builder.Services.AddScoped<IExpenseService, ExpenseService>();
 builder.Services.AddScoped<IBalanceService, BalanceService>();
 builder.Services.AddScoped<IActivityService, ActivityService>();

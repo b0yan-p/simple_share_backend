@@ -68,14 +68,11 @@ public sealed class BalanceTests(ApiFixture fixture)
         await client.UpdateExpenseAsync(groupId, new
         {
             Id = hotel.Id,
-            TotalAmount = 60m,
-            Payments = new[] { new { MemberId = me, Amount = 60m } },
-            Splits = new[]
-            {
-                new { MemberId = me, Amount = 20m },
-                new { MemberId = bo, Amount = 20m },
-                new { MemberId = cy, Amount = 20m },
-            },
+            Financial = new {
+                ExpenseDate = DateOnly.FromDateTime(DateTime.UtcNow), OriginalCurrency = "BAM", OriginalAmount = 60m,
+                Payments = new[] { new { MemberId = me, OriginalAmount = 60m } },
+                Splits = new[] { new { MemberId = me, OriginalAmount = 20m }, new { MemberId = bo, OriginalAmount = 20m }, new { MemberId = cy, OriginalAmount = 20m } }
+            }
         }, ct);
 
         await client.RemoveExpenseAsync(groupId, lunch.Id, ct);
@@ -86,7 +83,7 @@ public sealed class BalanceTests(ApiFixture fixture)
             FromMemberId = cy,
             ToMemberId = me,
             Amount = 20m,
-            Date = DateTime.UtcNow,
+            Date = DateOnly.FromDateTime(DateTime.UtcNow),
         }, ct);
 
         // Assert
@@ -168,12 +165,11 @@ public sealed class BalanceTests(ApiFixture fixture)
         var (client, groupId, members) = await GroupOfAsync(ct, "Bo");
         var (me, bo) = (members[0], members[1]);
 
-        // Amounts are numeric(19,4), so a client can land a pair half a cent
+        // Legacy numeric(19,4) rows can contain a pair half a cent
         // apart: Bo owes me 5.00 and I owe Bo 5.005.
         await client.AddExpenseAsync(groupId,
             ApiExtensions.ExpenseBody("Dinner", 10m, me, [(me, 5m), (bo, 5m)]), ct);
-        await client.AddExpenseAsync(groupId,
-            ApiExtensions.ExpenseBody("Cinema", 10.005m, bo, [(me, 5.005m), (bo, 5m)]), ct);
+        await fixture.InsertLegacyExpenseAsync(groupId, "Cinema", 10.005m, bo, [(me, 5.005m), (bo, 5m)], ct);
 
         // Act
         var balances = await client.GetBalancesAsync(groupId, ct);

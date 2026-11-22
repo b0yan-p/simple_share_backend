@@ -2,9 +2,15 @@ namespace simpleShare_backend.Contracts.Expenses;
 
 public class ExpenseResponse
 {
+    public string GroupCurrency { get; set; } = "";
+    public decimal OriginalAmount { get; set; }
+    public string OriginalCurrency { get; set; } = "";
+    public decimal ExchangeRate { get; set; }
+    public DateOnly? ExchangeRateDate { get; set; }
+
     public Guid Id { get; set; }
     public string Description { get; set; } = string.Empty;
-    public DateTime ExpenseDate { get; set; }
+    public DateOnly ExpenseDate { get; set; }
     public decimal Amount { get; set; }
     public bool IsSettleUp { get; set; }
     public ExpenseLogResponse CreatedInfo { get; set; } = default!;

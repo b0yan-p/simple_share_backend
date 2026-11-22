@@ -2,6 +2,9 @@ namespace simpleShare_backend.Contracts.Group;
 
 public class GroupResponse
 {
+    public bool CurrencyLocked { get; set; }
+    public bool CanChangeCurrency { get; set; }
+    public string Currency { get; set; } = "";
     public Guid Id { get; set; }
     public string Name { get; set; } = string.Empty;
     public bool SimplifyDebts { get; set; } = false;

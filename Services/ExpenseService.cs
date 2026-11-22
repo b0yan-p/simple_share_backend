@@ -1,5 +1,11 @@
+using System.Globalization;
+using System.Security.Cryptography;
+using System.Text.Json;
+using Npgsql;
 using Microsoft.EntityFrameworkCore;
 using simpleShare_backend.Common;
+using simpleShare_backend.Common.Currencies;
+using simpleShare_backend.Services.Calculations;
 using simpleShare_backend.Common.Exceptions;
 using simpleShare_backend.Contracts.Expenses;
 using simpleShare_backend.Data;
@@ -13,126 +19,61 @@ namespace simpleShare_backend.Services;
 
 public class ExpenseService(
     ApplicationDbContext db,
-    IRepositoryAsync repo,
     IGroupService groupService,
     IMemberService memberService,
     IGroupMemberService groupMemberService,
     IActivityWriter activityWriter,
-    IActivityService activityService
+    IActivityService activityService,
+    IExchangeRateProvider exchangeRates
 ) : IExpenseService
 {
-    public async Task<Expense> CreateExpenseAsync(Guid groupId, CreateExpenseRequest request, GroupMember owner)
+    private static DateTime StoreDate(DateOnly date) => date.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc);
+    private static (Guid Id, decimal Amount)[] Payments(ExpenseFinancialInput input) => input.Payments.Select(x => (x.MemberId, x.OriginalAmount)).ToArray();
+    private static (Guid Id, decimal Amount)[] Splits(ExpenseFinancialInput input) => input.Splits.Select(x => (x.MemberId, x.OriginalAmount)).ToArray();
+
+    private async Task ValidateParticipantsAsync(Guid groupId, (Guid Id, decimal Amount)[] payments,
+        (Guid Id, decimal Amount)[] splits, string currency, string target, bool settlement)
     {
-        ValidateCreateExpenseRequest(request);
-
-        _ = await groupService.GetGroupAsync(groupId)
-            ?? throw new NotFoundAppException("group_not_found", "Group does not exist");
-
-        if (owner.LeftAt is not null || owner.GroupMemberStatus == GroupMemberStatus.Deleted)
-            throw new ForbiddenAppException("member_not_in_group", "Member is not in the group!");
-
-        Expense expense = new()
-        {
-            Id = Guid.NewGuid(),
-            GroupId = groupId,
-            Description = request.Description.Trim(),
-            TotalAmount = request.TotalAmount,
-            ExpenseDate = request.ExpenseDate,
-            CreatedAt = DateTime.UtcNow,
-            CreatedByMemberId = owner.MemberId,
-            IsSettleUp = request.IsSettleUp,
-        };
-
-        return await repo.CreateAsync<Expense, Guid>(expense);
+        if (settlement && (currency != target || payments.Length != 1 || splits.Length != 1))
+            throw new ValidationAppException("settlement_invalid", "A settlement uses group currency with one payer and one recipient.");
+        if (settlement && payments[0].Id == splits[0].Id)
+            throw new ValidationAppException("invalid_request", "You cannot pay to yourself!");
+        var active = (await groupMemberService.GetAllGroupMembersDefaultAsync(groupId))
+            .Where(x => x.LeftAt == null && x.GroupMemberStatus != GroupMemberStatus.Deleted).Select(x => x.MemberId).ToHashSet();
+        if (payments.Concat(splits).Any(x => !active.Contains(x.Id)))
+            throw new ValidationAppException("allocations_invalid_members", "Allocations contain inactive group members.");
     }
 
-    public async Task<ICollection<ExpensePayment>> CreateExpensePaymentsAsync(
-        Expense expense,
-        IReadOnlySet<Guid> activeMemberIds,
-        ICollection<ExpensePaymentRequest> payments
-    )
+    private async Task ApplyFinancialAsync(Expense expense, ExpenseFinancialInput input, string target, bool reuseRate, bool settlement = false, CancellationToken cancellationToken = default)
     {
-        if (payments is null || payments.Count == 0)
-            throw new ValidationAppException("payments_required", "Payments are required!");
-
-        if (payments.Any(p => p.Amount <= 0))
-            throw new ValidationAppException("payment_amount_invalid", "Payment amount must be greater than 0");
-
-        var paymentMemberIds = payments
-            .Select(x => x.MemberId)
-            .ToList();
-
-        if (paymentMemberIds.Distinct().Count() != payments.Count)
-            throw new ValidationAppException("payments_not_unique", "Payment list must be unique");
-
-        if (paymentMemberIds.Any(id => !activeMemberIds.Contains(id)))
-            throw new ValidationAppException("payments_invalid_members", "Payment list contains deleted group members");
-
-        decimal sum = payments.Sum(x => x.Amount);
-        if (Math.Abs(sum - expense.TotalAmount) > 0.0001m)
-            throw new ValidationAppException("invalid_request_data", "Payment amounts are not splitted correctly!");
-
-        List<ExpensePayment> paymentToCreate = [];
-
+        if (input.ExpenseDate == default) throw new ValidationAppException("expense_date_invalid", "Expense date is required.");
+        var currency = CurrencyCatalog.Validate(input.OriginalCurrency);
+        if (input.Payments is null || input.Splits is null) throw new ValidationAppException("original_allocations_invalid", "Payments and splits are required.");
+        var payments = Payments(input);
+        var splits = Splits(input);
+        ExpenseMoneyNormalizer.ValidateOriginal(input.OriginalAmount, payments, splits);
+        await ValidateParticipantsAsync(expense.GroupId, payments, splits, currency, target, settlement);
+        var observation = reuseRate ? new ExchangeRateObservation(expense.ExchangeRate, expense.ExchangeRateDate ?? input.ExpenseDate)
+            : currency == target ? new ExchangeRateObservation(1m, input.ExpenseDate)
+            : await exchangeRates.GetRateAsync(currency, target, input.ExpenseDate, cancellationToken);
+        var total = ExpenseMoneyNormalizer.Total(input.OriginalAmount, observation.Rate);
+        var normalizedPayments = ExpenseMoneyNormalizer.Allocate(payments, observation.Rate, total);
+        var normalizedSplits = ExpenseMoneyNormalizer.Allocate(splits, observation.Rate, total);
+        expense.TotalAmount = total;
+        expense.OriginalAmount = input.OriginalAmount;
+        expense.OriginalCurrency = currency;
+        expense.ExchangeRate = observation.Rate;
+        if (!reuseRate) expense.ExchangeRateDate = observation.Date;
+        expense.ExpenseDate = StoreDate(input.ExpenseDate);
         var now = DateTime.UtcNow;
-        foreach (var payment in payments)
-        {
-            paymentToCreate.Add(new()
-            {
-                Amount = payment.Amount,
-                PaidByMemberId = payment.MemberId,
-                ExpenseId = expense.Id,
-                CreatedAt = now,
-            });
-        }
-
-        return await repo.AddRangeAsync(paymentToCreate);
+        foreach (var row in payments) expense.Payments.Add(new ExpensePayment { ExpenseId = expense.Id, PaidByMemberId = row.Id, OriginalAmount = row.Amount, Amount = normalizedPayments[row.Id], CreatedAt = now });
+        foreach (var row in splits) expense.Splits.Add(new ExpenseSplit { ExpenseId = expense.Id, OwedByMemberId = row.Id, OriginalAmount = row.Amount, Amount = normalizedSplits[row.Id], CreatedAt = now });
     }
 
-    public async Task<ICollection<ExpenseSplit>> CreateExpenseSplitsAsync(
-        Expense expense,
-        IReadOnlySet<Guid> activeMemberIds,
-        ICollection<SplitRequest> splits
-    )
-    {
-        if (splits is null || splits.Count == 0)
-            throw new ValidationAppException("splits_required", "Splits are required!");
+    public Task<ExpenseResponse> GetExpenseAsync(Guid groupId, Guid expenseId, Guid userId) =>
+        ReadExpenseAsync(groupId, expenseId, userId, includeDeleted: false);
 
-        if (splits.Any(p => p.Amount <= 0))
-            throw new ValidationAppException("split_amount_invalid", "Split amount must be greater than 0");
-
-        var splitsMemberIds = splits
-            .Select(x => x.MemberId)
-            .ToList();
-
-        if (splitsMemberIds.Distinct().Count() != splits.Count)
-            throw new ValidationAppException("splits_not_unique", "Splits list mys be unique");
-
-        if (splitsMemberIds.Any(id => !activeMemberIds.Contains(id)))
-            throw new ValidationAppException("splits_invalid_members", "Split list contains deleted group members");
-
-        decimal sum = splits.Sum(x => x.Amount);
-        if (Math.Abs(sum - expense.TotalAmount) > 0.0001m)
-            throw new ValidationAppException("splits_sum_invalid", "Split amounts are not splitted correctly!");
-
-        List<ExpenseSplit> splitsToCreate = [];
-
-        var now = DateTime.UtcNow;
-        foreach (var split in splits)
-        {
-            splitsToCreate.Add(new()
-            {
-                Amount = split.Amount,
-                OwedByMemberId = split.MemberId,
-                ExpenseId = expense.Id,
-                CreatedAt = now,
-            });
-        }
-
-        return await repo.AddRangeAsync(splitsToCreate);
-    }
-
-    public async Task<ExpenseResponse> GetExpenseAsync(Guid groupId, Guid expenseId, Guid userId)
+    private async Task<ExpenseResponse> ReadExpenseAsync(Guid groupId, Guid expenseId, Guid userId, bool includeDeleted)
     {
         var isMember = await groupMemberService.IsUserGroupMember(groupId, userId);
 
@@ -140,7 +81,8 @@ public class ExpenseService(
             throw new ForbiddenAppException("forbidden", "Unauthorized access!");
 
         var expense = await db.Expenses
-            .Where(e => e.Id == expenseId && e.GroupId == groupId && e.DeletedAt == null)
+            .Where(e => e.Id == expenseId && e.GroupId == groupId && (includeDeleted || e.DeletedAt == null))
+            .Include(e => e.Group)
             .Include(e => e.Payments)
                 .ThenInclude(p => p.PaidByMember)
             .Include(e => e.Splits)
@@ -155,9 +97,14 @@ public class ExpenseService(
         return new ExpenseResponse()
         {
             Id = expense.Id,
-            Amount = Math.Round(expense.TotalAmount, 2, MidpointRounding.AwayFromZero),
+            Amount = expense.TotalAmount,
+            OriginalAmount = expense.OriginalAmount,
+            OriginalCurrency = expense.OriginalCurrency,
+            GroupCurrency = expense.Group.Currency,
+            ExchangeRate = expense.ExchangeRate,
+            ExchangeRateDate = expense.ExchangeRateDate,
             Description = expense.Description,
-            ExpenseDate = expense.ExpenseDate,
+            ExpenseDate = DateOnly.FromDateTime(expense.ExpenseDate),
             IsSettleUp = expense.IsSettleUp ?? false,
             CreatedInfo = new ExpenseLogResponse()
             {
@@ -173,13 +120,15 @@ public class ExpenseService(
             },
             PaidBy = [.. expense.Payments.Select(p => new ExpenseMemberAmountResponse()
             {
-                Amount = Math.Round(p.Amount, 2, MidpointRounding.AwayFromZero),
+                Amount = p.Amount,
+                OriginalAmount = p.OriginalAmount,
                 MemberId = p.PaidByMemberId,
                 MemberName = p.PaidByMember.DisplayName
             })],
             SplittedBy = [.. expense.Splits.Select(s => new ExpenseMemberAmountResponse()
             {
-                Amount = Math.Round(s.Amount, 2, MidpointRounding.AwayFromZero),
+                Amount = s.Amount,
+                OriginalAmount = s.OriginalAmount,
                 MemberId = s.OwedByMemberId,
                 MemberName = s.OwedByMember.DisplayName
             })]
@@ -213,6 +162,9 @@ public class ExpenseService(
                 e.ExpenseDate,
                 e.CreatedAt,
                 e.TotalAmount,
+                e.OriginalAmount,
+                e.OriginalCurrency,
+                GroupCurrency = e.Group.Currency,
                 e.IsSettleUp,
 
                 PaidByMembers = e.Payments.Select(p => p.PaidByMember.DisplayName),
@@ -230,10 +182,13 @@ public class ExpenseService(
         {
             Id = e.Id,
             Description = e.Description,
-            ExpenseDate = e.ExpenseDate,
+            ExpenseDate = DateOnly.FromDateTime(e.ExpenseDate),
             CreatedAt = e.CreatedAt,
             IsSettleUp = e.IsSettleUp ?? false,
-            Amount = Math.Round(e.TotalAmount, 2, MidpointRounding.AwayFromZero),
+            Amount = e.TotalAmount,
+            OriginalAmount = e.OriginalAmount,
+            OriginalCurrency = e.OriginalCurrency,
+            GroupCurrency = e.GroupCurrency,
             PaidByMembers = [.. e.PaidByMembers],
             Net = Math.Round(e.PaidSum - e.SplitSum, 2, MidpointRounding.AwayFromZero)
         })
@@ -244,123 +199,132 @@ public class ExpenseService(
         return new PageResponse<ExpenseListResponse>(result, count, skip, take);
     }
 
-    public async Task<ExpenseResponse> UpdateExpenseAsync(Guid groupId, UpdateExpenseRequest request, Guid userId)
+    public async Task<ExpenseResponse> UpdateExpenseAsync(Guid groupId, UpdateExpenseRequest request, Guid userId, CancellationToken cancellationToken = default)
     {
-        ValidateUpdateExpenseRequest(request);
-
-        var meMember = await memberService.GetMemberByUserIdAsync(userId)
-            ?? throw new NotFoundAppException("member_not_found", "Member not found in group");
-
-        var isMember = await groupMemberService.IsUserGroupMember(groupId, userId);
-        if (!isMember)
-            throw new ForbiddenAppException("forbidden", "Unauthorized access!");
-
-        var dbExpense = await db.Expenses
-            .Where(x => x.Id == request.Id && x.GroupId == groupId && x.DeletedAt == null)
-            .FirstOrDefaultAsync()
-            ?? throw new NotFoundAppException("expense_not_found", "Expense not found!");
-
+        if (!await groupMemberService.IsUserGroupMember(groupId, userId))
+            throw new ForbiddenAppException("forbidden", "Unauthorized access.");
+        var member = await memberService.GetMemberByUserIdAsync(userId) ?? throw new NotFoundAppException("member_not_found", "Member not found.");
         await using var tx = await db.Database.BeginTransactionAsync();
-
-        var oldExpense = (Expense)db.Entry(dbExpense).OriginalValues.Clone().ToObject();
-
-        dbExpense.ModifiedAt = DateTime.UtcNow;
-        dbExpense.Description = request.Description ?? dbExpense.Description;
-        dbExpense.ExpenseDate = request.ExpenseDate ?? dbExpense.ExpenseDate;
-        dbExpense.ModifiedByMemberId = meMember.Id;
-        dbExpense.TotalAmount = request.TotalAmount ?? dbExpense.TotalAmount;
-
-        var groupMembers = await groupMemberService.GetAllGroupMembersDefaultAsync(groupId);
-        var activeMemberIds = groupMembers
-                    .Where(x =>
-                        x.GroupMemberStatus != GroupMemberStatus.Deleted &&
-                        x.LeftAt is null
-                    )
-                    .Select(x => x.MemberId)
-                    .ToHashSet();
-
-        if (request.Payments != null)
+        var expense = await db.Expenses.FromSqlInterpolated($"SELECT * FROM \"Expenses\" WHERE \"Id\" = {request.Id} AND \"GroupId\" = {groupId} AND \"DeletedAt\" IS NULL FOR UPDATE")
+            .SingleOrDefaultAsync() ?? throw new NotFoundAppException("expense_not_found", "Expense not found.");
+        await db.Entry(expense).Collection(x => x.Payments).LoadAsync();
+        await db.Entry(expense).Collection(x => x.Splits).LoadAsync();
+        await db.Entry(expense).Reference(x => x.Group).LoadAsync();
+        var oldExpense = (Expense)db.Entry(expense).OriginalValues.Clone().ToObject();
+        var input = request.Financial;
+        var allocationsChanged = false;
+        if (input != null)
         {
-            await DeleteExpensePaymentsAsync(dbExpense.Id);
-            await CreateExpensePaymentsAsync(dbExpense, activeMemberIds, request.Payments);
+            if (input.Payments is null || input.Splits is null) throw new ValidationAppException("original_allocations_invalid", "Payments and splits are required.");
+            var currency = CurrencyCatalog.Validate(input.OriginalCurrency);
+            var sameDate = input.ExpenseDate == DateOnly.FromDateTime(expense.ExpenseDate);
+            var sameCurrency = currency == expense.OriginalCurrency;
+            bool samePayments = Payments(input).OrderBy(x => x.Id).SequenceEqual(expense.Payments.Select(x => (x.PaidByMemberId, x.OriginalAmount)).OrderBy(x => x.PaidByMemberId));
+            bool sameSplits = Splits(input).OrderBy(x => x.Id).SequenceEqual(expense.Splits.Select(x => (x.OwedByMemberId, x.OriginalAmount)).OrderBy(x => x.OwedByMemberId));
+            allocationsChanged = !samePayments || !sameSplits;
+            if (!sameDate || !sameCurrency || input.OriginalAmount != expense.OriginalAmount || !samePayments || !sameSplits)
+            {
+                // Validate and build the entire replacement before removing persisted children.
+                var replacement = new Expense { Id = expense.Id, GroupId = groupId, ExchangeRate = expense.ExchangeRate, ExchangeRateDate = expense.ExchangeRateDate };
+                await ApplyFinancialAsync(replacement, input, expense.Group.Currency, sameDate && sameCurrency, expense.IsSettleUp == true, cancellationToken);
+                db.ExpensePayments.RemoveRange(expense.Payments);
+                db.ExpenseSplits.RemoveRange(expense.Splits);
+                await db.SaveChangesAsync();
+                expense.Payments.Clear(); expense.Splits.Clear();
+                expense.TotalAmount = replacement.TotalAmount; expense.OriginalAmount = replacement.OriginalAmount;
+                expense.OriginalCurrency = replacement.OriginalCurrency; expense.ExchangeRate = replacement.ExchangeRate;
+                expense.ExchangeRateDate = replacement.ExchangeRateDate; expense.ExpenseDate = replacement.ExpenseDate;
+                foreach (var payment in replacement.Payments) expense.Payments.Add(payment);
+                foreach (var split in replacement.Splits) expense.Splits.Add(split);
+            }
+            else if (expense.IsSettleUp == true)
+            {
+                await ValidateParticipantsAsync(groupId, Payments(input), Splits(input), currency, expense.Group.Currency, true);
+            }
         }
-
-        if (request.Splits != null)
+        if (request.Description is not null)
         {
-            await DeleteExpenseSplitsAsync(dbExpense.Id);
-            await CreateExpenseSplitsAsync(dbExpense, activeMemberIds, request.Splits);
+            if (string.IsNullOrWhiteSpace(request.Description)) throw new ValidationAppException("invalid_request", "Description is required.");
+            expense.Description = request.Description.Trim();
         }
-
-        var activity = activityService.AddExpenseUpdatedActivity(oldExpense, dbExpense, meMember.Id);
-        activityWriter.Enqueue(activity);
-
-        await repo.SaveChangesAsync();
-        var result = await GetExpenseAsync(groupId, dbExpense.Id, userId);
+        expense.ModifiedAt = DateTime.UtcNow; expense.ModifiedByMemberId = member.Id;
+        activityWriter.Enqueue(activityService.AddExpenseUpdatedActivity(oldExpense, expense, member.Id, allocationsChanged));
+        await db.SaveChangesAsync();
+        var result = await GetExpenseAsync(groupId, expense.Id, userId);
         await tx.CommitAsync();
-
         return result;
     }
 
-    public async Task<ExpenseResponse> SaveExpenseAsync(Guid groupId, CreateExpenseRequest request, Guid userId)
+    public Task<ExpenseResponse> SaveExpenseAsync(Guid groupId, CreateExpenseRequest request, Guid userId, CancellationToken cancellationToken = default) => SaveCoreAsync(groupId, request, userId, false, cancellationToken);
+
+    // Keep the original create identity stable across subsequent edits and soft deletion.
+    private static byte[] CreateFingerprint(CreateExpenseRequest request)
     {
-        ValidateCreateExpenseRequest(request);
+        static string Money(decimal amount) => amount.ToString("G29", CultureInfo.InvariantCulture);
+        static object Rows((Guid Id, decimal Amount)[] rows) =>
+            rows.OrderBy(x => x.Id).Select(x => new { x.Id, Amount = Money(x.Amount) });
+        if (request.Payments is null || request.Splits is null)
+            throw new ValidationAppException("original_allocations_invalid", "Payments and splits are required.");
+        return SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(new {
+            Description = request.Description.Trim(), request.ExpenseDate,
+            Currency = CurrencyCatalog.Validate(request.OriginalCurrency), Amount = Money(request.OriginalAmount),
+            Payments = Rows(Payments(request)), Splits = Rows(Splits(request))
+        }));
+    }
 
-        _ = await memberService.GetMemberByUserIdAsync(userId)
-            ?? throw new NotFoundAppException("member_not_found", "Member does not exist!");
+    private static ConflictAppException CreateConflict() =>
+        new("expense_create_conflict", "This create identifier already belongs to a different expense request.");
 
-        var groupMembers = await groupMemberService.GetAllGroupMembersDefaultAsync(groupId);
-        var activeMembers = groupMembers
-            .Where(x => x.GroupMemberStatus != GroupMemberStatus.Deleted && x.LeftAt is null);
-
-        var activeMemberIds = activeMembers.Select(x => x.MemberId).ToHashSet();
-
-        var gm = activeMembers
-            .Where(e => e.Member.UserId == userId)
-            .FirstOrDefault()
-                ?? throw new ForbiddenAppException("member_not_in_group", "Member is not in the group!");
-
-        var expense = await CreateExpenseAsync(groupId, request, gm)
-            ?? throw new ConflictAppException("expense_create_failed", "Failed to create expense");
-
-
-        await CreateExpensePaymentsAsync(expense, activeMemberIds, request.Payments);
-        await CreateExpenseSplitsAsync(expense, activeMemberIds, request.Splits);
-
-        if (request.IsSettleUp != null && request.IsSettleUp.Value)
+    private async Task<ExpenseResponse> SaveCoreAsync(Guid groupId, CreateExpenseRequest request, Guid userId, bool settlement, CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(request.Description)) throw new ValidationAppException("invalid_request", "Description is required.");
+        await using var tx = await db.Database.BeginTransactionAsync();
+        var group = await db.Groups.FromSqlInterpolated($"SELECT * FROM \"Groups\" WHERE \"Id\" = {groupId} AND \"DeletedAt\" IS NULL FOR UPDATE")
+            .SingleOrDefaultAsync() ?? throw new NotFoundAppException("group_not_found", "Group not found.");
+        await db.Entry(group).ReloadAsync(cancellationToken);
+        if (settlement) request.OriginalCurrency = group.Currency;
+        var members = await groupMemberService.GetAllGroupMembersDefaultAsync(groupId);
+        var owner = members.FirstOrDefault(x => x.LeftAt == null && x.GroupMemberStatus != GroupMemberStatus.Deleted && x.Member.UserId == userId)
+            ?? throw new ForbiddenAppException("member_not_in_group", "Not an active group member.");
+        var id = settlement ? Guid.NewGuid() : request.ClientExpenseId;
+        if (id == Guid.Empty)
+            throw new ValidationAppException("client_expense_id_required", "A client expense identifier is required.");
+        var fingerprint = settlement ? null : CreateFingerprint(request);
+        if (!settlement)
         {
-            var activity = new ActivityEvent<SettleUpActivityData>(
-                Type: ActivityType.SettleUpCreated,
-                EntityType: ActivityEntityType.SettleUp,
-                EntityId: expense.Id,
-                GroupId: groupId,
-                ActorMemberId: gm.MemberId,
-                Data: new SettleUpActivityData(
-                    FromMemberId: expense.Payments.FirstOrDefault()!.PaidByMemberId,
-                    ToMemberId: expense.Splits.FirstOrDefault()!.OwedByMemberId,
-                    Amount: expense.TotalAmount
-                )
-            );
-            activityWriter.Enqueue(activity);
+            var existing = await db.Expenses.AsNoTracking().Where(e => e.Id == id)
+                .Select(e => new { e.GroupId, e.CreatedByMemberId, e.CreateFingerprint })
+                .SingleOrDefaultAsync(cancellationToken);
+            if (existing != null)
+            {
+                if (existing.GroupId != groupId || existing.CreatedByMemberId != owner.MemberId ||
+                    existing.CreateFingerprint == null || !existing.CreateFingerprint.SequenceEqual(fingerprint!))
+                    throw CreateConflict();
+                return await ReadExpenseAsync(groupId, id, userId, includeDeleted: true);
+            }
         }
+        var expense = new Expense { Id = id, CreateFingerprint = fingerprint, GroupId = groupId, Group = group, Description = request.Description.Trim(), CreatedAt = DateTime.UtcNow, CreatedByMemberId = owner.MemberId, IsSettleUp = settlement };
+        await ApplyFinancialAsync(expense, request, group.Currency, false, settlement, cancellationToken);
+        db.Expenses.Add(expense);
+        if (settlement)
+            activityWriter.Enqueue(new ActivityEvent<SettleUpActivityData>(Type: ActivityType.SettleUpCreated, EntityType: ActivityEntityType.SettleUp, EntityId: expense.Id, GroupId: groupId, ActorMemberId: owner.MemberId,
+                Data: new SettleUpActivityData(expense.Payments.Single().PaidByMemberId, expense.Splits.Single().OwedByMemberId, expense.TotalAmount)));
         else
+            activityWriter.Enqueue(new ActivityEvent<ExpenseActivityData>(Type: ActivityType.ExpenseCreated, EntityType: ActivityEntityType.Expense, EntityId: expense.Id, GroupId: groupId, ActorMemberId: owner.MemberId,
+                Data: new ExpenseActivityData(expense.Description, expense.TotalAmount)));
+        try
         {
-            var activityEvent = new ActivityEvent<ExpenseActivityData>(
-                Type: ActivityType.ExpenseCreated,
-                EntityType: ActivityEntityType.Expense,
-                EntityId: expense.Id,
-                GroupId: groupId,
-                ActorMemberId: gm.MemberId,
-                Data: new ExpenseActivityData(
-                    Description: expense.Description,
-                    Amount: expense.TotalAmount
-                )
-            );
-            activityWriter.Enqueue(activityEvent);
+            await db.SaveChangesAsync(cancellationToken);
         }
-
-        await repo.SaveChangesAsync();
-
-        return await GetExpenseAsync(groupId, expense.Id, userId);
+        catch (DbUpdateException ex) when (ex.InnerException is PostgresException
+               { SqlState: PostgresErrorCodes.UniqueViolation, ConstraintName: "PK_Expenses" })
+        {
+            // Different groups hold different row locks, but expense ids are globally unique.
+            throw CreateConflict();
+        }
+        var result = await GetExpenseAsync(groupId, expense.Id, userId);
+        await tx.CommitAsync();
+        return result;
     }
 
     public async Task<bool> DeleteExpenseAsync(Guid groupId, Guid expenseId, Guid userId)
@@ -400,7 +364,7 @@ public class ExpenseService(
         return true;
     }
 
-    public async Task<bool> SettleUpDebtAsync(Guid groupId, SettleUpRequest request, Guid userId)
+    public async Task<bool> SettleUpDebtAsync(Guid groupId, SettleUpRequest request, Guid userId, CancellationToken cancellationToken = default)
     {
         Member fromMember;
         Member toMember;
@@ -416,9 +380,6 @@ public class ExpenseService(
                 ?? throw new NotFoundAppException("member_not_found", "Member not found!");
         }
 
-        if (request.FromMemberId == request.ToMemberId)
-            throw new ValidationAppException("invalid_request", "You cannot pay to yourself!");
-
         var isGroupMemberA = await groupMemberService.IsGroupMemberAsync(groupId, request.FromMemberId.Value);
         var isGroupMemberB = await groupMemberService.IsGroupMemberAsync(groupId, request.ToMemberId);
 
@@ -428,70 +389,27 @@ public class ExpenseService(
         toMember = await memberService.GetMemberAsync(request.ToMemberId)
             ?? throw new NotFoundAppException("member_not_found", "Member not found!");
 
-        var amount = Math.Round(request.Amount, 2, MidpointRounding.AwayFromZero);
+        var amount = request.Amount;
 
         CreateExpenseRequest expRequest = new()
         {
             Description = $"{fromMember.DisplayName} paid to {toMember.DisplayName} {amount}",
             ExpenseDate = request.Date,
-            TotalAmount = amount,
-            IsSettleUp = true,
+            OriginalAmount = amount,
+            OriginalCurrency = (await groupService.GetGroupAsync(groupId)).Currency,
             Payments = [new ExpensePaymentRequest(){
                 MemberId = request.FromMemberId.Value,
-                Amount = amount
+                OriginalAmount = amount
             }],
             Splits = [new SplitRequest(){
                 MemberId = request.ToMemberId,
-                Amount = amount
+                OriginalAmount = amount
             }]
         };
 
-        await SaveExpenseAsync(groupId, expRequest, userId);
+        await SaveCoreAsync(groupId, expRequest, userId, true, cancellationToken);
 
         return true;
     }
 
-    private void ValidateCreateExpenseRequest(CreateExpenseRequest request)
-    {
-        if (string.IsNullOrEmpty(request.Description))
-            throw new ValidationAppException("invalid_request", "Description is required");
-
-        if (request.ExpenseDate == default)
-            throw new ValidationAppException("invalid_request", "Expense date is required");
-
-        if (request.TotalAmount <= 0)
-            throw new ValidationAppException("invalid_request", "Total amount must be greater than 0");
-
-        if (request.IsSettleUp != null && request.IsSettleUp.Value && request.Payments.Count > 1)
-            throw new ValidationAppException("invalid_request", "Settle up can be done only by one payer at the time!");
-
-        if (request.IsSettleUp != null && request.IsSettleUp.Value && request.Splits.Count > 1)
-            throw new ValidationAppException("invalid_request", "Settle up can be done only to one member at the time!");
-    }
-
-    private void ValidateUpdateExpenseRequest(UpdateExpenseRequest request)
-    {
-        if (request.ExpenseDate != null && request.ExpenseDate == default)
-            throw new ValidationAppException("invalid_request", "Expense date is required");
-
-        if (request.TotalAmount != null && request.TotalAmount <= 0)
-            throw new ValidationAppException("invalid_request", "Total amount must be greater than 0");
-
-        if (request.TotalAmount > 0 && (request.Payments == null || request.Payments.Count == 0 || request.Splits == null))
-            throw new ValidationAppException("invalid_request", "Please enter payments and split shares!");
-    }
-
-    private async Task DeleteExpensePaymentsAsync(Guid expenseId)
-    {
-        await db.ExpensePayments
-            .Where(ep => ep.ExpenseId == expenseId)
-            .ExecuteDeleteAsync();
-    }
-
-    private async Task DeleteExpenseSplitsAsync(Guid expenseId)
-    {
-        await db.ExpenseSplits
-            .Where(es => es.ExpenseId == expenseId)
-            .ExecuteDeleteAsync(); ;
-    }
 }

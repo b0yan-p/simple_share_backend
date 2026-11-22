@@ -17,6 +17,7 @@ public interface IActivityService
     ActivityEvent<ExpenseUpdatedActivityData> AddExpenseUpdatedActivity(
         Expense oldExpense,
         Expense newExpense,
-        Guid ActorMemberId
+        Guid ActorMemberId,
+        bool allocationsChanged = false
     );
 }

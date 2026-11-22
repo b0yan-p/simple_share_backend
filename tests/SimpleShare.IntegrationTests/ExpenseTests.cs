@@ -74,7 +74,7 @@ public sealed class ExpenseTests(ApiFixture fixture)
         var response = await client.PostAsJsonAsync($"/api/Expense/{groupId}", request, ct);
 
         // Assert
-        await response.ShouldBeProblemAsync(HttpStatusCode.BadRequest, "payments_required", ct);
+        await response.ShouldBeProblemAsync(HttpStatusCode.BadRequest, "original_allocations_invalid", ct);
     }
 
     [Fact] // EXP-03
@@ -92,7 +92,7 @@ public sealed class ExpenseTests(ApiFixture fixture)
         var response = await client.PostAsJsonAsync($"/api/Expense/{groupId}", request, ct);
 
         // Assert
-        await response.ShouldBeProblemAsync(HttpStatusCode.BadRequest, "payment_amount_invalid", ct);
+        await response.ShouldBeProblemAsync(HttpStatusCode.BadRequest, "original_allocations_invalid", ct);
     }
 
     [Fact] // EXP-04
@@ -108,7 +108,7 @@ public sealed class ExpenseTests(ApiFixture fixture)
         var response = await client.PostAsJsonAsync($"/api/Expense/{groupId}", request, ct);
 
         // Assert
-        await response.ShouldBeProblemAsync(HttpStatusCode.BadRequest, "payments_not_unique", ct);
+        await response.ShouldBeProblemAsync(HttpStatusCode.BadRequest, "original_allocations_invalid", ct);
     }
 
     [Fact] // EXP-05
@@ -124,7 +124,7 @@ public sealed class ExpenseTests(ApiFixture fixture)
         var response = await client.PostAsJsonAsync($"/api/Expense/{groupId}", request, ct);
 
         // Assert
-        await response.ShouldBeProblemAsync(HttpStatusCode.BadRequest, "invalid_request_data", ct);
+        await response.ShouldBeProblemAsync(HttpStatusCode.BadRequest, "original_allocations_invalid", ct);
     }
 
     [Fact] // EXP-06
@@ -139,7 +139,7 @@ public sealed class ExpenseTests(ApiFixture fixture)
         var response = await client.PostAsJsonAsync($"/api/Expense/{groupId}", request, ct);
 
         // Assert
-        await response.ShouldBeProblemAsync(HttpStatusCode.BadRequest, "splits_required", ct);
+        await response.ShouldBeProblemAsync(HttpStatusCode.BadRequest, "original_allocations_invalid", ct);
     }
 
     [Fact] // EXP-07
@@ -155,7 +155,7 @@ public sealed class ExpenseTests(ApiFixture fixture)
         var response = await client.PostAsJsonAsync($"/api/Expense/{groupId}", request, ct);
 
         // Assert
-        await response.ShouldBeProblemAsync(HttpStatusCode.BadRequest, "split_amount_invalid", ct);
+        await response.ShouldBeProblemAsync(HttpStatusCode.BadRequest, "original_allocations_invalid", ct);
     }
 
     [Fact] // EXP-08
@@ -170,7 +170,7 @@ public sealed class ExpenseTests(ApiFixture fixture)
         var response = await client.PostAsJsonAsync($"/api/Expense/{groupId}", request, ct);
 
         // Assert
-        await response.ShouldBeProblemAsync(HttpStatusCode.BadRequest, "splits_not_unique", ct);
+        await response.ShouldBeProblemAsync(HttpStatusCode.BadRequest, "original_allocations_invalid", ct);
     }
 
     [Fact] // EXP-09
@@ -186,7 +186,7 @@ public sealed class ExpenseTests(ApiFixture fixture)
         var response = await client.PostAsJsonAsync($"/api/Expense/{groupId}", request, ct);
 
         // Assert
-        await response.ShouldBeProblemAsync(HttpStatusCode.BadRequest, "splits_sum_invalid", ct);
+        await response.ShouldBeProblemAsync(HttpStatusCode.BadRequest, "original_allocations_invalid", ct);
     }
 
     [Fact] // EXP-10
@@ -208,7 +208,7 @@ public sealed class ExpenseTests(ApiFixture fixture)
         var response = await client.PostAsJsonAsync($"/api/Expense/{groupId}", request, ct);
 
         // Assert
-        await response.ShouldBeProblemAsync(HttpStatusCode.BadRequest, "payments_invalid_members", ct);
+        await response.ShouldBeProblemAsync(HttpStatusCode.BadRequest, "allocations_invalid_members", ct);
     }
 
     [Fact] // EXP-10
@@ -227,7 +227,7 @@ public sealed class ExpenseTests(ApiFixture fixture)
         var response = await client.PostAsJsonAsync($"/api/Expense/{groupId}", request, ct);
 
         // Assert
-        await response.ShouldBeProblemAsync(HttpStatusCode.BadRequest, "splits_invalid_members", ct);
+        await response.ShouldBeProblemAsync(HttpStatusCode.BadRequest, "allocations_invalid_members", ct);
     }
 
     // -------------------------------------------------------------- read
@@ -301,13 +301,13 @@ public sealed class ExpenseTests(ApiFixture fixture)
         var request = new
         {
             Id = created.Id,
-            TotalAmount = 10m,
-            Payments = new[] { new { MemberId = me, Amount = 10m } },
-            Splits = new[]
-            {
-                new { MemberId = me, Amount = 5m },
-                new { MemberId = bo, Amount = 5m },
-            },
+            Financial = new {
+                ExpenseDate = DateOnly.FromDateTime(DateTime.UtcNow),
+                OriginalAmount = 10m,
+                OriginalCurrency = "BAM",
+                Payments = new[] { new { MemberId = me, OriginalAmount = 10m } },
+                Splits = new[] { new { MemberId = me, OriginalAmount = 5m }, new { MemberId = bo, OriginalAmount = 5m } }
+            }
         };
 
         // Act
@@ -399,7 +399,7 @@ public sealed class ExpenseTests(ApiFixture fixture)
             FromMemberId = bo,
             ToMemberId = me,
             Amount = 10m,
-            Date = DateTime.UtcNow,
+            Date = DateOnly.FromDateTime(DateTime.UtcNow),
         };
 
         // Act
@@ -428,7 +428,7 @@ public sealed class ExpenseTests(ApiFixture fixture)
             FromMemberId = bo,
             ToMemberId = me,
             Amount = 4m,
-            Date = DateTime.UtcNow,
+            Date = DateOnly.FromDateTime(DateTime.UtcNow),
         };
 
         // Act
@@ -453,7 +453,7 @@ public sealed class ExpenseTests(ApiFixture fixture)
 
         // FromMemberId omitted, so it resolves to the caller - the same member
         // the payment is aimed at.
-        var request = new { ToMemberId = me, Amount = 5m, Date = DateTime.UtcNow };
+        var request = new { ToMemberId = me, Amount = 5m, Date = DateOnly.FromDateTime(DateTime.UtcNow) };
 
         // Act
         var response = await client.PostAsJsonAsync($"/api/Expense/{groupId}/settleUp", request, ct);
@@ -470,7 +470,7 @@ public sealed class ExpenseTests(ApiFixture fixture)
         var (client, groupId, _, _, _) = await ThreeMemberGroupAsync(ct);
         var elsewhere = await client.CreateGroupAsync("Elsewhere", ct);
         var outsider = await client.AddVirtualMemberAsync(elsewhere.Id, "Outsider", ct);
-        var request = new { ToMemberId = outsider, Amount = 5m, Date = DateTime.UtcNow };
+        var request = new { ToMemberId = outsider, Amount = 5m, Date = DateOnly.FromDateTime(DateTime.UtcNow) };
 
         // Act
         var response = await client.PostAsJsonAsync($"/api/Expense/{groupId}/settleUp", request, ct);
@@ -492,7 +492,7 @@ public sealed class ExpenseTests(ApiFixture fixture)
             FromMemberId = bo,
             ToMemberId = me,
             Amount = 10m,
-            Date = DateTime.UtcNow,
+            Date = DateOnly.FromDateTime(DateTime.UtcNow),
         };
 
         // Act

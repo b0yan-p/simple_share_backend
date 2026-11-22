@@ -16,7 +16,7 @@ public sealed class GroupTests(ApiFixture fixture)
         var (client, _) = await fixture.CreateAuthenticatedClientAsync(ct, createMember: false);
 
         // Act
-        var response = await client.PostAsJsonAsync("/api/Group", new { Name = "Trip" }, ct);
+        var response = await client.PostAsJsonAsync("/api/Group", new { Name = "Trip", Currency = "BAM" }, ct);
 
         // Assert
         response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync(ct));
@@ -209,7 +209,7 @@ public sealed class GroupTests(ApiFixture fixture)
         // Arrange
         var ct = TestContext.Current.CancellationToken;
         var (client, _) = await fixture.CreateAuthenticatedClientAsync(ct);
-        var request = new { Name = new string('x', 49) };   // MaxLength(48)
+        var request = new { Name = new string('x', 49), Currency = "BAM" };   // MaxLength(48)
 
         // Act
         var response = await client.PostAsJsonAsync("/api/Group", request, ct);

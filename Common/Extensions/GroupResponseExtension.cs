@@ -11,6 +11,7 @@ public static class GroupResponseExtension
         {
             Id = group.Id,
             Name = group.Name,
+            Currency = group.Currency,
             SimplifyDebts = group.SimplifyDebts,
             CreatedAt = group.CreatedAt,
             DeletedAt = group.DeletedAt,

@@ -1,14 +1,19 @@
 using System.ComponentModel.DataAnnotations;
-
+using System.Text.Json.Serialization;
 namespace simpleShare_backend.Contracts.Expenses;
 
-public class CreateExpenseRequest
+[JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
+public class ExpenseFinancialInput
 {
-    [MaxLength(200)]
-    public required string Description { get; set; }
-    required public DateTime ExpenseDate { get; set; }
-    required public decimal TotalAmount { get; set; }
-    public bool? IsSettleUp { get; set; }
+    public required DateOnly ExpenseDate { get; set; }
+    public required decimal OriginalAmount { get; set; }
+    public required string OriginalCurrency { get; set; }
     public required ICollection<ExpensePaymentRequest> Payments { get; set; } = [];
     public required ICollection<SplitRequest> Splits { get; set; } = [];
+}
+[JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
+public class CreateExpenseRequest : ExpenseFinancialInput
+{
+    public Guid ClientExpenseId { get; set; }
+    [Required, MaxLength(200)] public required string Description { get; set; }
 }

@@ -129,7 +129,7 @@ public static class ApiExtensions
     public static async Task<GroupResponse> CreateGroupAsync(
         this HttpClient client, string name, CancellationToken ct)
     {
-        var response = await client.PostAsJsonAsync("/api/Group", new { Name = name }, ct);
+        var response = await client.PostAsJsonAsync("/api/Group", new { Name = name, Currency = "BAM" }, ct);
         return await response.ReadOkAsync<GroupResponse>(ct);
     }
 
@@ -256,12 +256,13 @@ public static class ApiExtensions
         IEnumerable<(Guid MemberId, decimal Amount)> splits,
         bool? isSettleUp = null) => new
         {
+            ClientExpenseId = Guid.NewGuid(),
             Description = description,
-            ExpenseDate = DateTime.UtcNow,
-            TotalAmount = totalAmount,
-            IsSettleUp = isSettleUp,
-            Payments = payments.Select(p => new { p.MemberId, p.Amount }).ToArray(),
-            Splits = splits.Select(s => new { s.MemberId, s.Amount }).ToArray(),
+            ExpenseDate = DateOnly.FromDateTime(DateTime.UtcNow),
+            OriginalAmount = totalAmount,
+            OriginalCurrency = "BAM",
+            Payments = payments.Select(p => new { p.MemberId, OriginalAmount = p.Amount }).ToArray(),
+            Splits = splits.Select(s => new { s.MemberId, OriginalAmount = s.Amount }).ToArray(),
         };
 
     /// <summary>One payer covering the whole amount, with explicit splits.</summary>
@@ -331,13 +332,14 @@ public static class ApiExtensions
     }
 
     /// <summary>The caller's standing across every group they belong to.</summary>
-    public static async Task<OverallBalanceResponse> GetMyBalanceAsync(
+    public static async Task<simpleShare_backend.Models.Application.CurrencyBalance> GetMyBalanceAsync(
         this HttpClient client,
         CancellationToken ct
     )
     {
         var response = await client.GetAsync("/api/Balance/me", ct);
-        return await response.ReadOkAsync<OverallBalanceResponse>(ct);
+        var overall = await response.ReadOkAsync<OverallBalanceResponse>(ct);
+        return overall.Balances.SingleOrDefault(x => x.Currency == "BAM") ?? new simpleShare_backend.Models.Application.CurrencyBalance { Currency = "BAM" };
     }
 
     /// <summary>

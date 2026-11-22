@@ -32,19 +32,19 @@ public class GroupController(IGroupService service) : ControllerBase
     }
 
     [HttpPut]
-    public async Task<IActionResult> UpdateGroupAsync([FromBody] CreateGroupRequest request)
+    public async Task<IActionResult> UpdateGroupAsync([FromBody] UpdateGroupRequest request)
     {
         if (!ModelState.IsValid)
             return BadRequest(ModelState);
 
-        var response = await service.UpdateGroupAsync(request);
+        var response = await service.UpdateGroupAsync(request, User.GetUserId());
         return Ok(response);
     }
 
     [HttpGet("{groupId}")]
     public async Task<IActionResult> GetGroupByIdAsync([FromRoute] Guid groupId)
     {
-        var response = await service.GetGroupAsync(groupId);
+        var response = await service.GetGroupAsync(groupId, User.GetUserId());
         return Ok(response);
     }
 

@@ -14,7 +14,7 @@ public sealed class GroupTests(ApiFixture fixture)
     {
         // Arrange
         var ct = TestContext.Current.CancellationToken;
-        var (client, _) = await fixture.CreateAuthenticatedClientAsync(ct, createMember: false);
+        var client = await fixture.CreateClientWithoutMemberAsync(ct);
 
         // Act
         var response = await client.PostAsJsonAsync("/api/Group", new { Name = "Trip", Currency = "BAM" }, ct);

@@ -83,7 +83,6 @@ public class AuthService(
     {
         var identity = await googleAuthService.ValidateIdTokenAsync(idToken, ct);
         var user = await externalAccountService.FindOrCreateUserAsync(identity);
-        await memberService.EnsureMemberForUserAsync(user);
 
         return await authSessionService.CreateSessionAsync(user);
     }

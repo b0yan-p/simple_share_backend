@@ -6,6 +6,7 @@ namespace simpleShare_backend.Contracts.Auth
         public required string FirstName { get; set; }
         public required string LastName { get; set; }
         public string FullName => $"{FirstName} {LastName}";
+        public required string DisplayName { get; set; }
         public required string Token { get; set; }
         public required string Email { get; set; }
     }

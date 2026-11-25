@@ -33,14 +33,27 @@ public static class ApiExtensions
     /// <summary>Creates an isolated, confirmed Identity user and issues a real JWT; no onboarding HTTP calls.</summary>
     public static async Task<(HttpClient Client, LoginUserResponse User)> CreateAuthenticatedClientAsync(
         this ApiFixture fixture, CancellationToken ct, string firstName = "Test", string lastName = "User",
-        bool withPassword = false, bool createMember = true)
+        bool withPassword = false)
     {
         var client = fixture.CreateClient();
-        var user = await fixture.CreateUserAsync(ct, firstName, lastName, withPassword: withPassword, createMember: createMember);
+        var user = await fixture.CreateUserAsync(ct, firstName, lastName, withPassword: withPassword);
         using var scope = fixture.Services.CreateScope();
         var session = await scope.ServiceProvider.GetRequiredService<IAuthSessionService>().CreateSessionAsync(user);
         client.UseBearer(session.Token);
         return (client, session);
+    }
+
+    public static async Task<HttpClient> CreateClientWithoutMemberAsync(this ApiFixture fixture, CancellationToken ct)
+    {
+        var user = await fixture.CreateUserAsync(ct, createMember: false);
+        using var scope = fixture.Services.CreateScope();
+        var token = scope.ServiceProvider.GetRequiredService<simpleShare_backend.Interfaces.ITokenService>()
+            .CreateToken(user, ["User"]);
+        var client = fixture.CreateClient();
+
+        client.UseBearer(token);
+
+        return client;
     }
 
     public static async Task<User> CreateUserAsync(
@@ -55,8 +68,12 @@ public static class ApiExtensions
         var address = email ?? UniqueEmail();
         var user = new User
         {
-            Id = Guid.NewGuid(), Email = address, UserName = address, FirstName = firstName,
-            LastName = lastName, EmailConfirmed = confirmed
+            Id = Guid.NewGuid(),
+            Email = address,
+            UserName = address,
+            FirstName = firstName,
+            LastName = lastName,
+            EmailConfirmed = confirmed
         };
         var result = withPassword ? await manager.CreateAsync(user, ValidPassword) : await manager.CreateAsync(user);
         result.Succeeded.ShouldBeTrue(string.Join("; ", result.Errors.Select(x => x.Code)));

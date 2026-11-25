@@ -22,7 +22,7 @@ public sealed class AuthTests(ApiFixture fixture)
     {
         // Arrange
         var ct = TestContext.Current.CancellationToken;
-        var (_, user) = await fixture.CreateAuthenticatedClientAsync(ct, withPassword: true);
+        var user = await fixture.CreateUserAsync(ct, withPassword: true, createMember: false);
         var client = fixture.CreateClient();
 
         // Act
@@ -38,6 +38,7 @@ public sealed class AuthTests(ApiFixture fixture)
         var body = await response.Content.ReadFromJsonAsync<LoginUserResponse>(ct);
         body.ShouldNotBeNull();
         body.Id.ShouldBe(user.Id);
+        body.DisplayName.ShouldBe("Test User");
         body.Token.ShouldNotBeNullOrWhiteSpace();
     }
 
@@ -118,6 +119,7 @@ public sealed class AuthTests(ApiFixture fixture)
         body.Id.ShouldNotBe(Guid.Empty);
         body.Email.ShouldBe(email);
         body.FirstName.ShouldBe("Grace");
+        body.DisplayName.ShouldBe("Grace Hopper");
         body.LastName.ShouldBe("Hopper");
         body.Token.ShouldNotBeNullOrWhiteSpace();
 

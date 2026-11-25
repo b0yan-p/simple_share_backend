@@ -30,7 +30,7 @@ public sealed class OverallBalanceTests(ApiFixture fixture)
     {
         // Arrange
         var ct = TestContext.Current.CancellationToken;
-        var (client, _) = await fixture.CreateAuthenticatedClientAsync(ct, createMember: false);
+        var client = await fixture.CreateClientWithoutMemberAsync(ct);
 
         // Act
         var balance = await client.GetMyBalanceAsync(ct);

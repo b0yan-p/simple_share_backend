@@ -2,6 +2,13 @@ namespace simpleShare_backend.Services.Interfaces;
 
 public interface IEmailService
 {
+    Task SendPasswordResetEmailAsync(
+        string email,
+        string firstName,
+        string resetUrl,
+        CancellationToken cancellationToken = default
+    );
+
     Task SendVerificationEmailAsync(
         string email,
         string firstName,

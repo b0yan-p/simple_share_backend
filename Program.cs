@@ -39,6 +39,7 @@ builder
     })
     .AddIdentity<User, IdentityRole<Guid>>(options =>
     {
+        options.Tokens.PasswordResetTokenProvider = PasswordResetTokenProvider.ProviderName;
         options.Password.RequireDigit = true;
         options.Password.RequireLowercase = true;
         options.Password.RequireUppercase = true;
@@ -48,7 +49,8 @@ builder
     .AddEntityFrameworkStores<ApplicationDbContext>()
     // Email confirmation tokens come from here. Without it
     // GenerateEmailConfirmationTokenAsync throws NotSupportedException.
-    .AddDefaultTokenProviders();
+    .AddDefaultTokenProviders()
+    .AddTokenProvider<PasswordResetTokenProvider>(PasswordResetTokenProvider.ProviderName);
 
 builder
     .Services.AddAuthentication(options =>
@@ -165,6 +167,7 @@ builder.Services.AddScoped<IEmailService, ResendEmailService>();
 
 builder.Services.Configure<AppLinkOptions>(builder.Configuration.GetSection(AppLinkOptions.SectionName));
 builder.Services.AddScoped<IEmailVerificationService, EmailVerificationService>();
+builder.Services.AddScoped<PasswordRecoveryService>();
 
 // Identity's confirmation tokens are Data Protection payloads, so they only
 // outlive a restart if the keys do. Unset means the in-memory default, which is
@@ -216,7 +219,7 @@ var forwardedHeaders = new ForwardedHeadersOptions
 {
     ForwardedHeaders = ForwardedHeaders.XForwardedProto | ForwardedHeaders.XForwardedFor,
 };
-forwardedHeaders.KnownNetworks.Clear();
+forwardedHeaders.KnownIPNetworks.Clear();
 forwardedHeaders.KnownProxies.Clear();
 
 app.UseForwardedHeaders(forwardedHeaders);

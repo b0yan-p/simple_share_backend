@@ -8,4 +8,5 @@ namespace simpleShare_backend.Common.Email;
 public static class EmailTemplates
 {
     public const string Verification = "verify-email";
+    public const string PasswordReset = "password-reset-1";
 }

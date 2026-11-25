@@ -7,6 +7,20 @@ namespace SimpleShare.IntegrationTests;
 public sealed class RecordingEmailService : IEmailService
 {
     public sealed record Message(string Email, string FirstName, string VerificationUrl);
+    public sealed record ResetMessage(string Email, string FirstName, string ResetUrl);
+    private readonly ConcurrentQueue<ResetMessage> resetMessages = new();
+    public ResetMessage[] ResetsFor(string email) => resetMessages
+        .Where(x => string.Equals(x.Email, email, StringComparison.OrdinalIgnoreCase)).ToArray();
+
+    public Task SendPasswordResetEmailAsync(string email, string firstName, string resetUrl,
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        if (failures.ContainsKey(email)) throw new InvalidOperationException("Simulated email transport failure.");
+        resetMessages.Enqueue(new(email, firstName, resetUrl));
+        return Task.CompletedTask;
+    }
+
     private readonly ConcurrentQueue<Message> messages = new();
     private readonly ConcurrentDictionary<string, byte> failures = new(StringComparer.OrdinalIgnoreCase);
 

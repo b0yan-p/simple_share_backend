@@ -1,6 +1,9 @@
+using System.Globalization;
+using System.Net;
 using Microsoft.Extensions.Options;
 using Resend;
 using simpleShare_backend.Common.Email;
+using simpleShare_backend.Common.Security;
 using simpleShare_backend.Services.Interfaces;
 
 namespace simpleShare_backend.Services;
@@ -17,6 +20,58 @@ public class ResendEmailService(
 ) : IEmailService
 {
     private readonly ResendOptions _options = options.Value;
+
+    public async Task SendPasswordResetEmailAsync(
+        string email,
+        string firstName,
+        string resetUrl,
+        CancellationToken cancellationToken = default)
+    {
+        var message = new EmailMessage
+        {
+            From = new EmailAddress { Email = _options.FromEmail, DisplayName = _options.FromName },
+            To = email,
+            Template = new EmailMessageTemplate
+            {
+                TemplateId = EmailTemplates.PasswordReset,
+                Variables = new Dictionary<string, object>
+                {
+                    ["FIRST_NAME"] = firstName,
+                    ["RESET_PASSWORD_URL"] = resetUrl,
+                    ["EXPIRATION_MINUTES"] = PasswordResetTokenProvider.ExpirationMinutes.ToString(CultureInfo.InvariantCulture),
+                },
+            },
+        };
+
+        try
+        {
+            var response = await resend.EmailSendAsync(message, cancellationToken);
+            logger.LogInformation("Sent password reset email using template {Template} (Resend id {EmailId})",
+                EmailTemplates.PasswordReset, response.Content);
+        }
+        catch (ResendException ex)
+        {
+            var reason = ex.StatusCode == HttpStatusCode.UnprocessableEntity
+                ? RedactResetLink(ex.Message, resetUrl).Replace(email, "[recipient]", StringComparison.OrdinalIgnoreCase)
+                : null;
+            logger.LogWarning(
+                "Resend rejected password reset email using template {Template} (HTTP {StatusCode}, {ErrorType}). Validation message: {Reason}",
+                EmailTemplates.PasswordReset, (int?)ex.StatusCode, ex.ErrorType, reason);
+            throw;
+        }
+    }
+
+    private static string RedactResetLink(string message, string resetUrl)
+    {
+        const string tokenParameter = "&token=";
+        var tokenStart = resetUrl.LastIndexOf(tokenParameter, StringComparison.Ordinal);
+        var sanitized = message.Replace(resetUrl, "[reset link]", StringComparison.Ordinal);
+        if (tokenStart < 0 || tokenStart + tokenParameter.Length == resetUrl.Length)
+            return sanitized;
+
+        var token = resetUrl[(tokenStart + tokenParameter.Length)..];
+        return sanitized.Replace(token, "[reset token]", StringComparison.Ordinal);
+    }
 
     public async Task SendVerificationEmailAsync(
         string email,

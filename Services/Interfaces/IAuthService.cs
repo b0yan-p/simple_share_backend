@@ -5,6 +5,8 @@ namespace simpleShare_backend.Services;
 /// <summary>The sign-in use cases. Only the ones that end in a session answer with LoginUserResponse.</summary>
 public interface IAuthService
 {
+    Task ChangePasswordAsync(Guid userId, ChangePasswordRequest input);
+
     /// <summary>
     /// Creates the account unconfirmed and mails a confirmation link - no
     /// session, so the answer carries no token. Registering again for an

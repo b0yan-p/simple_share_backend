@@ -61,6 +61,29 @@ public class AuthService(
         return Sent(user);
     }
 
+    public async Task ChangePasswordAsync(Guid userId, ChangePasswordRequest input)
+    {
+        var user = await userManager.FindByIdAsync(userId.ToString())
+            ?? throw new UnauthorizedAppException("invalid_session", "Please sign in again.");
+
+        if (!await userManager.HasPasswordAsync(user))
+        {
+            throw new ValidationAppException("no_local_password", "This account has no local password.");
+        }
+
+        var result = await userManager.ChangePasswordAsync(user, input.CurrentPassword, input.NewPassword);
+        if (result.Errors.Any(e => e.Code == nameof(IdentityErrorDescriber.PasswordMismatch)))
+        {
+            throw new ValidationAppException("incorrect_current_password", "Current password is incorrect.");
+        }
+        if (result.Errors.Any(e => e.Code.StartsWith("Password", StringComparison.Ordinal)))
+        {
+            throw new ValidationAppException("invalid_new_password", "Choose a stronger password.", result.ToErrorDictionary());
+        }
+
+        result.EnsureSucceeded("Change password");
+    }
+
     public async Task<LoginUserResponse> LoginAsync(LoginRequest input)
     {
         var user = await userManager.FindByEmailAsync(input.Email);

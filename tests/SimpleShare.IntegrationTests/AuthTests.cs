@@ -83,6 +83,31 @@ public sealed class AuthTests(ApiFixture fixture)
         (await response.Content.ReadAsStringAsync(ct)).ShouldContain(LoginFailureMessage);
     }
 
+    private const string ChangePasswordRoute = "/api/auth/change-password";
+
+    [Fact]
+    public async Task ChangePasswordRequiresSessionAndCurrentPasswordAndPreservesSession()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var (client, user) = await fixture.CreateAuthenticatedClientAsync(ct, withPassword: true);
+        var anonymous = fixture.CreateClient();
+        var input = new ChangePasswordRequest(ApiExtensions.ValidPassword, "Updated123");
+        (await anonymous.PostAsJsonAsync(ChangePasswordRoute, input, ct)).StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+
+        var wrong = await client.PostAsJsonAsync(ChangePasswordRoute, input with { CurrentPassword = "wrong" }, ct);
+        await wrong.ShouldBeProblemAsync(HttpStatusCode.BadRequest, "incorrect_current_password", ct);
+        var weak = await client.PostAsJsonAsync(ChangePasswordRoute, input with { NewPassword = "weak" }, ct);
+        await weak.ShouldBeProblemAsync(HttpStatusCode.BadRequest, "invalid_new_password", ct);
+
+        (await client.PostAsJsonAsync(ChangePasswordRoute, input, ct)).StatusCode.ShouldBe(HttpStatusCode.NoContent);
+        var profile = await client.GetFromJsonAsync<simpleShare_backend.Contracts.Profile.ProfileResponse>("/api/profile/me", ct);
+        profile.ShouldNotBeNull().HasPassword.ShouldBeTrue();
+        var oldLogin = await anonymous.PostAsJsonAsync("/api/auth/login", new { user.Email, Password = input.CurrentPassword }, ct);
+        await oldLogin.ShouldBeProblemAsync(HttpStatusCode.Unauthorized, "invalid_credentials", ct);
+        var login = await anonymous.PostAsJsonAsync("/api/auth/login", new { user.Email, Password = input.NewPassword }, ct);
+        (await login.ReadOkAsync<LoginUserResponse>(ct)).HasPassword.ShouldBeTrue();
+    }
+
     // ------------------------------------------------------------------ google
 
     [Fact] // AUTH-12
@@ -125,6 +150,10 @@ public sealed class AuthTests(ApiFixture fixture)
 
         var authenticated = fixture.CreateClient();
         authenticated.UseBearer(body.Token);
+        body.HasPassword.ShouldBeFalse();
+        var change = await authenticated.PostAsJsonAsync(ChangePasswordRoute,
+            new ChangePasswordRequest("anything", ApiExtensions.ValidPassword), ct);
+        await change.ShouldBeProblemAsync(HttpStatusCode.BadRequest, "no_local_password", ct);
         (await authenticated.GetAsync("/api/UserConnection", ct)).StatusCode.ShouldBe(HttpStatusCode.OK);
     }
 

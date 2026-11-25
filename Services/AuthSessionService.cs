@@ -13,6 +13,7 @@ public class AuthSessionService(UserManager<User> userManager, ITokenService tok
         var roles = await userManager.GetRolesAsync(user);
         return new LoginUserResponse
         {
+            HasPassword = await userManager.HasPasswordAsync(user),
             Id = user.Id,
             Email = user.Email!,
             FirstName = user.FirstName,

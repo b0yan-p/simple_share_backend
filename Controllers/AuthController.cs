@@ -1,4 +1,6 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using simpleShare_backend.Common.Extensions;
 using simpleShare_backend.Contracts.Auth;
 using simpleShare_backend.Services;
 
@@ -35,6 +37,14 @@ namespace simpleShare_backend.Controllers
         [HttpPost("confirm-email")]
         public async Task<ActionResult<ConfirmEmailResponse>> ConfirmEmailAsync([FromBody] ConfirmEmailRequest input) =>
             Ok(await _emailVerificationService.ConfirmAsync(input));
+
+        [Authorize]
+        [HttpPost("change-password")]
+        public async Task<IActionResult> ChangePasswordAsync(ChangePasswordRequest input)
+        {
+            await _authService.ChangePasswordAsync(User.GetUserId(), input);
+            return NoContent();
+        }
 
         [HttpPost("login")]
         public async Task<ActionResult<LoginUserResponse>> LoginAsync([FromBody] LoginRequest input) =>

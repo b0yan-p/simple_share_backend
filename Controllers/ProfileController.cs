@@ -1,3 +1,5 @@
+using Microsoft.AspNetCore.Identity;
+using simpleShare_backend.Models.Identity;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -11,7 +13,7 @@ namespace simpleShare_backend.Controllers;
 [ApiController]
 [Authorize]
 [Route("api/profile/me")]
-public class ProfileController(ApplicationDbContext db) : ControllerBase
+public class ProfileController(ApplicationDbContext db, UserManager<User> users) : ControllerBase
 {
     [HttpDelete]
     public async Task<IActionResult> DeleteAsync([FromServices] simpleShare_backend.Services.AccountDeletionService accounts, CancellationToken ct)
@@ -21,16 +23,17 @@ public class ProfileController(ApplicationDbContext db) : ControllerBase
     }
 
     [HttpGet]
-    public async Task<ProfileDetails> GetAsync(CancellationToken ct)
+    public async Task<ProfileResponse> GetAsync(CancellationToken ct)
     {
         var userId = User.GetUserId();
-        return await db.Members.Where(m => m.UserId == userId && m.DeletedAt == null)
-            .Select(m => new ProfileDetails(m.User!.FirstName, m.User.LastName, m.DisplayName))
+        var profile = await db.Members.Where(m => m.UserId == userId && m.DeletedAt == null)
+            .Select(m => new { m.User, m.DisplayName })
             .SingleOrDefaultAsync(ct) ?? throw ProfileNotFound();
+        return await ToResponseAsync(profile.User!, profile.DisplayName);
     }
 
     [HttpPut]
-    public async Task<ProfileDetails> UpdateAsync(ProfileDetails input, CancellationToken ct)
+    public async Task<ProfileResponse> UpdateAsync(ProfileDetails input, CancellationToken ct)
     {
         var firstName = input.FirstName.Trim();
         var lastName = input.LastName.Trim();
@@ -58,8 +61,11 @@ public class ProfileController(ApplicationDbContext db) : ControllerBase
 
         await db.SaveChangesAsync(ct);
 
-        return new ProfileDetails(firstName, lastName, displayName);
+        return await ToResponseAsync(member.User, displayName);
     }
+
+    private async Task<ProfileResponse> ToResponseAsync(User user, string displayName) =>
+        new(user.FirstName, user.LastName, displayName, await users.HasPasswordAsync(user));
 
     private static NotFoundAppException ProfileNotFound() => new("profile_not_found", "Profile not found.");
 }

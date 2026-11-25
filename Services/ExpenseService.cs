@@ -167,7 +167,7 @@ public class ExpenseService(
                 GroupCurrency = e.Group.Currency,
                 e.IsSettleUp,
 
-                PaidByMembers = e.Payments.Select(p => p.PaidByMember.DisplayName),
+                Payers = e.Payments.Select(p => new ExpensePayer(p.PaidByMemberId, p.PaidByMember.DisplayName)).ToList(),
                 PaidSum = e.Payments
                     .Where(p => p.PaidByMemberId == meMember.Id)
                     .Sum(p => (decimal?)p.Amount) ?? 0m,
@@ -189,7 +189,8 @@ public class ExpenseService(
             OriginalAmount = e.OriginalAmount,
             OriginalCurrency = e.OriginalCurrency,
             GroupCurrency = e.GroupCurrency,
-            PaidByMembers = [.. e.PaidByMembers],
+            Payers = e.Payers,
+            PaidByMembers = [.. e.Payers.Select(p => p.DisplayName)],
             Net = Math.Round(e.PaidSum - e.SplitSum, 2, MidpointRounding.AwayFromZero)
         })
         .ToList();

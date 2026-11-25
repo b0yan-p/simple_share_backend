@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Resend;
+using simpleShare_backend.Common.Extensions;
 using simpleShare_backend.Common.Email;
 using simpleShare_backend.Common.Endpoints;
 using simpleShare_backend.Common.Exceptions;
@@ -23,6 +24,7 @@ builder.Services.AddProblemDetails();
 builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
 
 builder.Services.AddHealthChecks();
+builder.Services.AddScoped<AccountDeletionService>();
 
 // Backs the resend cooldown in EmailVerificationService.
 builder.Services.AddMemoryCache();
@@ -61,6 +63,20 @@ builder
     })
     .AddJwtBearer(options =>
     {
+        options.Events = new JwtBearerEvents
+        {
+            OnTokenValidated = async context =>
+            {
+                var db = context.HttpContext.RequestServices.GetRequiredService<ApplicationDbContext>();
+                if (context.Principal is null || !context.Principal.TryGetUserId(out var id))
+                    context.Fail("Missing user id.");
+                else if (!await db.Users.AnyAsync(u => u.Id == id, context.HttpContext.RequestAborted))
+                {
+                    context.Response.Headers["X-Account-Deleted"] = "true";
+                    context.Fail("Account does not exist.");
+                }
+            }
+        };
         options.TokenValidationParameters = new TokenValidationParameters
         {
             ValidateIssuer = true,
@@ -104,7 +120,7 @@ builder.Services.AddCors(options =>
         "AllowAll",
         policy =>
         {
-            policy.AllowAnyOrigin().AllowAnyMethod().AllowAnyHeader();
+            policy.AllowAnyOrigin().AllowAnyMethod().AllowAnyHeader().WithExposedHeaders("X-Account-Deleted");
         }
     );
 });

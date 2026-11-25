@@ -256,6 +256,7 @@ public sealed class ExpenseTests(ApiFixture fixture)
         page.Data[0].Net.ShouldBe(15m);    // paid 30, owes 15
         page.Data[1].Net.ShouldBe(-10m);   // paid 0, owes 10
         page.Data[0].PaidByMembers.ShouldBe([MyName]);
+        page.Data[0].Payers.ShouldHaveSingleItem().ShouldBe(new ExpensePayer(me, MyName));
     }
 
     [Fact] // EXP-12

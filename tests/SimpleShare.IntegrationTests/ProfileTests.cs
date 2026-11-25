@@ -6,6 +6,7 @@ using Shouldly;
 using simpleShare_backend.Contracts.Auth;
 using simpleShare_backend.Contracts.Profile;
 using simpleShare_backend.Data;
+using simpleShare_backend.Models.Enums;
 
 namespace SimpleShare.IntegrationTests;
 
@@ -38,6 +39,72 @@ public sealed class ProfileTests(ApiFixture fixture)
         var login = await fixture.CreateClient().PostAsJsonAsync("/api/Auth/login",
             new { user.Email, Password = ApiExtensions.ValidPassword }, ct);
         (await login.ReadOkAsync<LoginUserResponse>(ct)).DisplayName.ShouldBe("Orb");
+    }
+
+    [Fact]
+    public async Task DeletePreservesMembersAndExpensesAndTransfersOnlyToRegisteredMembers()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var (owner, user) = await fixture.CreateAuthenticatedClientAsync(ct);
+        var (friend, _) = await fixture.CreateAuthenticatedClientAsync(ct);
+        var shared = await owner.CreateGroupAsync("Shared", ct);
+        var privateGroup = await owner.CreateGroupAsync("Private", ct);
+        await owner.AddVirtualMemberAsync(privateGroup.Id, "Guest", ct);
+        var me = await owner.MyMemberIdAsync(shared.Id, ct);
+        await owner.AddVirtualMemberAsync(shared.Id, "First joiner", ct);
+        var successor = await friend.CreateMemberIdentityAsync(ct);
+        (await owner.AddMemberAsync(shared.Id, new { MemberId = successor }, ct)).EnsureSuccessStatusCode();
+        var expense = ApiExtensions.ExpenseBody("Dinner", 20m, me, [(me, 10m), (successor, 10m)]);
+        (await owner.PostAsJsonAsync($"/api/Expense/{shared.Id}", expense, ct)).EnsureSuccessStatusCode();
+
+        (await owner.DeleteAsync(Route, ct)).StatusCode.ShouldBe(HttpStatusCode.NoContent);
+        (await owner.GetAsync(Route, ct)).StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+        var memberships = await friend.GetMembersAsync(shared.Id, ct);
+        memberships.Single(m => m.MemberId == successor).GroupRole.ShouldBe(GroupRole.Owner);
+        memberships.Single(m => m.MemberId == me).GroupRole.ShouldBe(GroupRole.Member);
+        using var scope = fixture.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        (await db.Users.AnyAsync(u => u.Id == user.Id, ct)).ShouldBeFalse();
+        var member = await db.Members.SingleAsync(m => m.Id == me, ct);
+        member.UserId.ShouldBeNull();
+        member.DisplayName.ShouldBe(user.DisplayName);
+        member.Email.ShouldBeNull();
+        member.NormalizedEmail.ShouldBeNull();
+        member.FirstName.ShouldBeNull();
+        member.LastName.ShouldBeNull();
+        (await db.ExpensePayments.AnyAsync(p => p.PaidByMemberId == me && p.Amount == 20m, ct)).ShouldBeTrue();
+        (await db.GroupMembers.AnyAsync(m => m.GroupId == privateGroup.Id && m.GroupRole == GroupRole.Owner, ct)).ShouldBeFalse();
+        (await db.UserConnections.AnyAsync(c => c.UserAId == user.Id || c.UserBId == user.Id, ct)).ShouldBeFalse();
+        var replacement = await fixture.CreateUserAsync(ct, email: user.Email);
+        (await db.Members.SingleAsync(m => m.UserId == replacement.Id, ct)).Id.ShouldNotBe(me);
+    }
+
+    [Fact]
+    public async Task DeleteSupportsAnAccountWithoutAMemberAndRequiresAuthentication()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        (await fixture.CreateClient().DeleteAsync(Route, ct)).StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+        var client = await fixture.CreateClientWithoutMemberAsync(ct);
+        (await client.DeleteAsync(Route, ct)).StatusCode.ShouldBe(HttpStatusCode.NoContent);
+        (await client.DeleteAsync(Route, ct)).StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+    }
+
+    [Fact]
+    public async Task ConcurrentDeletionOfOwnerAndSuccessorLeavesAnActiveRegisteredOwner()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var (owner, _) = await fixture.CreateAuthenticatedClientAsync(ct);
+        var (first, _) = await fixture.CreateAuthenticatedClientAsync(ct);
+        var (last, _) = await fixture.CreateAuthenticatedClientAsync(ct);
+        var group = await owner.CreateGroupAsync("Concurrent deletion", ct);
+        var firstId = await first.CreateMemberIdentityAsync(ct);
+        var lastId = await last.CreateMemberIdentityAsync(ct);
+        (await owner.AddMemberAsync(group.Id, new { MemberId = firstId }, ct)).EnsureSuccessStatusCode();
+        (await owner.AddMemberAsync(group.Id, new { MemberId = lastId }, ct)).EnsureSuccessStatusCode();
+        var results = await Task.WhenAll(owner.DeleteAsync(Route, ct), first.DeleteAsync(Route, ct));
+        results.ShouldAllBe(r => r.StatusCode == HttpStatusCode.NoContent);
+        var members = await last.GetMembersAsync(group.Id, ct);
+        members.Where(m => m.GroupRole == GroupRole.Owner).ShouldHaveSingleItem().MemberId.ShouldBe(lastId);
     }
 
     [Theory]

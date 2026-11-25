@@ -3,6 +3,8 @@ using simpleShare_backend.Models.Enums;
 
 namespace simpleShare_backend.Contracts.Expenses;
 
+public record ExpensePayer(Guid MemberId, string DisplayName);
+
 public class ExpenseListResponse
 {
     public string GroupCurrency { get; set; } = "";
@@ -16,5 +18,6 @@ public class ExpenseListResponse
     public decimal Net { get; set; }
     public bool IsSettleUp { get; set; }
     public DateTime CreatedAt { get; set; }
+    public ICollection<ExpensePayer> Payers { get; set; } = [];
     public ICollection<string> PaidByMembers { get; set; } = [];
 }

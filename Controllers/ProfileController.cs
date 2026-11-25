@@ -13,6 +13,13 @@ namespace simpleShare_backend.Controllers;
 [Route("api/profile/me")]
 public class ProfileController(ApplicationDbContext db) : ControllerBase
 {
+    [HttpDelete]
+    public async Task<IActionResult> DeleteAsync([FromServices] simpleShare_backend.Services.AccountDeletionService accounts, CancellationToken ct)
+    {
+        await accounts.DeleteAsync(User.GetUserId(), ct);
+        return NoContent();
+    }
+
     [HttpGet]
     public async Task<ProfileDetails> GetAsync(CancellationToken ct)
     {
